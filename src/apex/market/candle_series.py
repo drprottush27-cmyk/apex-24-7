@@ -29,6 +29,9 @@ class CandleSeries:
     def from_iterable(cls, candles: Iterable[Candle]) -> CandleSeries:
         return cls(tuple(candles))
 
+    def __len__(self) -> int:
+        return len(self.candles)
+
     @property
     def latest(self) -> Candle:
         return self.candles[-1]

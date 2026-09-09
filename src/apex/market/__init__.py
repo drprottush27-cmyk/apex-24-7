@@ -9,6 +9,7 @@ No execution capability. No order placement. No account access.
 
 from apex.market.candle_series import CandleSeries
 from apex.market.client import MarketClient
+from apex.market.exchange_info import BinanceExchangeFilterCache
 from apex.market.discovery import (
     SymbolInfo,
     TickerData,
@@ -30,6 +31,7 @@ from apex.market.transport import (
 __all__ = [
     # Core client
     "MarketClient",
+    "BinanceExchangeFilterCache",
     # Candle series (existing)
     "CandleSeries",
     # Discovery
