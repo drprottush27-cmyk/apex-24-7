@@ -7,12 +7,12 @@ plane: `apex.service`.
 
 APEX runs as a **single long-running process**:
 
-- `main.py` launches `uvicorn api.app:app` (host `127.0.0.1`, port `8000`).
-- The FastAPI `lifespan` constructs the `TradingOrchestrator`, the
-  `OrderExecutionManager`, the emergency kill switch, and the
-  `GracefulShutdown` — all inside that one process.
-- PostgreSQL and Redis run as Docker containers (`docker-compose.yml`) and are
-  reached over `127.0.0.1`.
+- `scripts/run_service.py --api-port 8000` launches the continuous autonomous
+  PAPER trading engine and localhost inspection API server.
+- The runtime lifecycle coordinates the `ScanScheduler`, `FullMarketScanner`,
+  `OrderExecutionManager`, and emergency kill switch in a deterministic loop.
+- Persistence is maintained via SQLite WAL journal (`src/apex/persistence/journal.py`).
+- PostgreSQL and Redis are available for optional enterprise analytics storage.
 
 There are **no** separate worker/dashboard/scanner daemons to run (`apps/` is
 stubbed). A single `.service` unit is therefore the correct deployment; no

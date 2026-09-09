@@ -1,16 +1,25 @@
+import logging
+import os
 from typing import AsyncGenerator
+from sqlalchemy import text
 from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, AsyncSession
 from sqlalchemy.orm import DeclarativeBase
-from sqlalchemy import text
-from core.config.settings import get_settings
-from core.logging.logger import logger
 
-settings = get_settings()
+logger = logging.getLogger("apex.storage.postgres")
 
-# Convert standard postgres URL to asyncpg driver dialect if needed
-db_url = settings.DATABASE_URL
+
+class Base(DeclarativeBase):
+    """Base declarative class for optional PostgreSQL storage models."""
+    pass
+
+
+# Database URL resolution with asyncpg dialect fallback
+_default_url = "postgresql+asyncpg://postgres:postgres@127.0.0.1:5432/apex"
+db_url = os.environ.get("DATABASE_URL", _default_url)
 if db_url.startswith("postgresql://"):
     db_url = db_url.replace("postgresql://", "postgresql+asyncpg://", 1)
+elif db_url.startswith("postgres://"):
+    db_url = db_url.replace("postgres://", "postgresql+asyncpg://", 1)
 
 engine = create_async_engine(
     db_url,
@@ -27,10 +36,6 @@ AsyncSessionLocal = async_sessionmaker(
     autocommit=False,
     autoflush=False,
 )
-
-
-class Base(DeclarativeBase):
-    pass
 
 
 async def get_db_session() -> AsyncGenerator[AsyncSession, None]:

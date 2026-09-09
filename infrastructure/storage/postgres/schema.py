@@ -5,7 +5,10 @@ from sqlalchemy import (
     ForeignKey, Text, JSON, Numeric, Index
 )
 from sqlalchemy.dialects.postgresql import UUID
-from infrastructure.postgres.database import Base
+try:
+    from infrastructure.storage.postgres.database import Base
+except ImportError:
+    from infrastructure.postgres.database import Base
 
 
 def utc_now() -> datetime:

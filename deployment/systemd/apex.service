@@ -39,13 +39,12 @@ Group=apex
 # Explicit working directory (prevents accidental execution from an unexpected cwd)
 WorkingDirectory=/home/apex/apex
 
-# Fail-closed startup guard: only start if the venv binary and the app config
-# file exist. `test` is a real binary, not a shell.
-ExecStartPre=/usr/bin/test -x /home/apex/apex/.venv/bin/uvicorn
-ExecStartPre=/usr/bin/test -r /home/apex/apex/.env
+# Fail-closed startup guard: only start if the venv binary and canonical service runner exist.
+ExecStartPre=/usr/bin/test -x /home/apex/apex/.venv/bin/python
+ExecStartPre=/usr/bin/test -f /home/apex/apex/scripts/run_service.py
 
-# Direct venv binary — no shell wrapper, no sub-shell, clean signal propagation.
-ExecStart=/home/apex/apex/.venv/bin/uvicorn api.app:app --host 127.0.0.1 --port 8000
+# Direct venv binary executing canonical run_service.py — no shell wrapper, clean signal propagation.
+ExecStart=/home/apex/apex/.venv/bin/python /home/apex/apex/scripts/run_service.py --api-port 8000
 
 # Bounded restart: recover from transient failures but never loop uncontrolled.
 Restart=on-failure

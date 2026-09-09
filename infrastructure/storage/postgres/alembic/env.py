@@ -1,9 +1,18 @@
 import asyncio
 import os
 import sys
-from dotenv import load_dotenv
-sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
-load_dotenv()
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except ImportError:
+    pass
+
+_current_dir = os.path.dirname(os.path.abspath(__file__))
+_postgres_dir = os.path.dirname(_current_dir)
+_repo_root = os.path.abspath(os.path.join(_current_dir, "..", "..", "..", ".."))
+for p in (_repo_root, _postgres_dir):
+    if p not in sys.path:
+        sys.path.insert(0, p)
 
 from logging.config import fileConfig
 
@@ -24,14 +33,18 @@ if config.config_file_name is not None:
 
 # add your model's MetaData object here
 # for 'autogenerate' support
-# from myapp import mymodel
-# target_metadata = mymodel.Base.metadata
 try:
-    from infrastructure.postgres.database import Base
+    from infrastructure.storage.postgres.database import Base
+    import infrastructure.storage.postgres.schema  # noqa: F401 - registers tables on Base.metadata
     target_metadata = Base.metadata
 except ImportError:
-    print('Warning: Could not import infrastructure.postgres.database.Base')
-    target_metadata = None
+    try:
+        from infrastructure.postgres.database import Base
+        import infrastructure.postgres.schema  # noqa: F401
+        target_metadata = Base.metadata
+    except ImportError:
+        print('Warning: Could not import infrastructure postgres Base metadata')
+        target_metadata = None
 
 
 # other values from the config, defined by the needs of env.py,
