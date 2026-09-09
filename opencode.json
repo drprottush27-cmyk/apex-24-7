@@ -1,0 +1,31 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "provider": {
+    "ollama": {
+      "npm": "@ai-sdk/openai-compatible",
+      "name": "Ollama (LOCAL — APEX SAFETY MODE)",
+      "options": {
+        "baseURL": "http://127.0.0.1:11434/v1"
+      },
+      "models": {
+        "llama3.1:8b": {
+          "name": "Llama 3.1 8B — LOCAL",
+          "limit": {
+            "context": 65536,
+            "output": 8192
+          }
+        },
+        "qwen3:4b": {
+          "name": "Qwen 3 4B — LOCAL",
+          "limit": {
+            "context": 65536,
+            "output": 8192
+          }
+        }
+      }
+    }
+  },
+  "model": "ollama/llama3.1:8b",
+  "small_model": "ollama/qwen3:4b",
+  "share": "disabled"
+}

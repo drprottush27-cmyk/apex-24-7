@@ -1,0 +1,946 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, minimum-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="APEX Control">
+  <meta name="format-detection" content="telephone=no">
+  <meta name="theme-color" content="#090d14">
+  <title>APEX 24/7 Command Center</title>
+  <link rel="stylesheet" href="/assets/style.css">
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+</head>
+<body>
+  <main class="app-shell">
+    <div id="pull-indicator" class="pull-indicator">↓ Pull to refresh</div>
+
+    <!-- Global Top Header -->
+    <header class="app-header">
+      <div class="brand-group">
+        <span class="brand-glyph">⚡</span>
+        <div class="brand-titles">
+          <h1 class="brand-name">APEX 24/7</h1>
+          <span class="brand-sub">UNIFIED CONTROL PLANE</span>
+        </div>
+      </div>
+      <div class="header-badges">
+        <span class="mini-badge green" id="global-state-badge" title="Authoritative State">RUNNING</span>
+        <span class="mini-badge" id="global-mode-badge" title="Trading Mode">PAPER ONLY</span>
+        <span class="mini-badge" id="global-regime-badge" title="Market Regime">COMPRESSION</span>
+        <span class="mini-badge" id="global-age-badge" title="Data Age">&lt;15s Fresh</span>
+        <span class="mini-badge green" id="global-ks-badge" title="KillSwitch Status">KS NORMAL</span>
+        <span class="mini-badge" id="global-clock" title="UTC Time">--:--:-- UTC</span>
+        <button id="open-chat-btn" class="header-action-btn" aria-label="Open Grounded Assistant" title="Grounded AI Assistant">💬 AI</button>
+        <button id="refresh-btn" class="header-action-btn refresh-btn" aria-label="Refresh Data" title="Refresh">↻</button>
+      </div>
+    </header>
+
+    <!-- Master Action Controls Bar -->
+    <section class="master-control-bar" aria-label="Master Control Plane">
+      <div class="control-bar-header">
+        <div class="control-status-indicator">
+          <span class="pulse-dot green" id="master-state-dot"></span>
+          <span class="control-state-label" id="master-state-text">SYSTEM RUNNING</span>
+          <span class="mini-badge" id="master-mode-pill">PAPER ONLY</span>
+        </div>
+        <div class="control-meta-group">
+          <span class="mini-badge" id="master-equity-pill">$10,000.00</span>
+          <span class="mini-badge green" id="master-risk-pill">RISK OK</span>
+        </div>
+      </div>
+      <div class="master-btn-row">
+        <button id="ctrl-start-btn" class="ctrl-btn btn-start" title="Start System">▶ START</button>
+        <button id="ctrl-pause-btn" class="ctrl-btn btn-pause" title="Pause New Entries">⏸ PAUSE</button>
+        <button id="ctrl-resume-btn" class="ctrl-btn btn-resume" title="Resume Trading">⏯ RESUME</button>
+        <button id="ctrl-stop-btn" class="ctrl-btn btn-stop" title="Graceful Stop">⏹ STOP</button>
+        <button id="ctrl-flatten-btn" class="ctrl-btn btn-flatten" title="Flatten Positions">⚡ FLATTEN</button>
+        <button id="ctrl-estop-btn" class="ctrl-btn btn-estop" title="Emergency Stop">🚨 EMERGENCY STOP</button>
+      </div>
+    </section>
+
+    <!-- 9-Section Top Navigation Pill Bar -->
+    <nav class="nav-pill-bar" aria-label="Sections">
+      <button class="nav-pill active" data-tab="home"><span>⚡</span>COMMAND</button>
+      <button class="nav-pill" data-tab="team"><span>👔</span>TEAM</button>
+      <button class="nav-pill" data-tab="scanner"><span>🔍</span>MARKET</button>
+      <button class="nav-pill" data-tab="trades"><span>📈</span>TRADING</button>
+      <button class="nav-pill" data-tab="investment"><span>🏛️</span>INVESTMENT</button>
+      <button class="nav-pill" data-tab="risk"><span>🛡️</span>RISK</button>
+      <button class="nav-pill" data-tab="alerts"><span>🔔</span>ALERTS</button>
+      <button class="nav-pill" data-tab="system"><span>⚙️</span>SYSTEM</button>
+      <button class="nav-pill" data-tab="audit"><span>📜</span>AUDIT</button>
+    </nav>
+
+    <!-- Global Emergency / Risk Alert Banners -->
+    <div id="safety-banner-slot"></div>
+    <div id="autoclose-alert-banner-slot"></div>
+
+    <!-- ══════════════════════════════════════════════════════════════════════ -->
+    <!-- SCREEN 1 — COMMAND DASHBOARD (HOME)                                   -->
+    <!-- ══════════════════════════════════════════════════════════════════════ -->
+    <section id="home-screen" class="screen tab-screen active" aria-label="Command Dashboard">
+      <div class="screen-scroll" id="home-scroll">
+
+        <!-- Status Overview Ribbon -->
+        <div class="status-ribbon">
+          <div class="ribbon-left">
+            <span class="pulse-dot green"></span>
+            <span id="ribbon-universe-status">100 USDT-M • SCANNING ACTIVE</span>
+          </div>
+          <div class="ribbon-right">
+            <span id="ribbon-latency-badge" class="subtle-pill">11s LATENCY</span>
+          </div>
+        </div>
+
+        <!-- 1. Equity Card -->
+        <section class="card equity-card" aria-labelledby="equity-title">
+          <div class="card-head">
+            <div>
+              <p class="card-eyebrow" id="equity-title">PORTFOLIO EQUITY (PAPER)</p>
+              <strong id="home-equity-value" class="equity-value skeleton-line">$10,000.00 USDT</strong>
+            </div>
+            <span id="home-equity-status" class="status-pill">PAPER ACTIVE</span>
+          </div>
+          <p id="home-equity-detail" class="equity-detail">Apex Risk Guardian Active | Max Leverage 3.0x</p>
+
+          <div class="metrics-grid four-col">
+            <div class="metric-cell">
+              <span class="cell-label">DAILY P&L</span>
+              <strong id="home-daily-pnl" class="cell-val neutral">+$0.00</strong>
+            </div>
+            <div class="metric-cell">
+              <span class="cell-label">DAILY DRAWDOWN</span>
+              <strong id="home-daily-dd" class="cell-val">0.00%</strong>
+            </div>
+            <div class="metric-cell">
+              <span class="cell-label">MAX DD KILL</span>
+              <strong id="home-dd-kill" class="cell-val">2.00%</strong>
+            </div>
+            <div class="metric-cell">
+              <span class="cell-label">OPEN SLOTS</span>
+              <strong id="home-open-slots" class="cell-val">0 / 2</strong>
+            </div>
+          </div>
+        </section>
+
+        <!-- 2. Scanner Intelligence Card -->
+        <section class="card scanner-card" aria-labelledby="scanner-card-title">
+          <div class="card-head">
+            <div>
+              <p class="card-eyebrow" id="scanner-card-title">INTELLIGENCE SCANNER</p>
+              <h2 class="card-title">Continuous Background Pacing</h2>
+            </div>
+            <span id="home-scanner-state" class="status-pill">SCANNING</span>
+          </div>
+          <div class="metrics-grid four-col">
+            <div class="metric-cell">
+              <span class="cell-label">SYMBOLS SCANNED</span>
+              <strong id="home-symbols-scanned" class="cell-val">100 / 100</strong>
+            </div>
+            <div class="metric-cell">
+              <span class="cell-label">LAST SCAN</span>
+              <strong id="home-last-scan" class="cell-val">Just now</strong>
+            </div>
+            <div class="metric-cell">
+              <span class="cell-label">SCAN LATENCY</span>
+              <strong id="home-scan-latency" class="cell-val">— ms</strong>
+            </div>
+            <div class="metric-cell">
+              <span class="cell-label">FAILURES</span>
+              <strong id="home-scan-failures" class="cell-val">0 data / 0 exec</strong>
+            </div>
+          </div>
+          <div class="card-footer-action">
+            <button class="text-link-btn" id="go-to-scanner-btn">View All Qualified Setups →</button>
+          </div>
+        </section>
+
+        <!-- 3. Active Position Card -->
+        <section class="card active-pos-card" aria-labelledby="active-pos-title">
+          <div class="card-head">
+            <div>
+              <p class="card-eyebrow" id="active-pos-title">ACTIVE PAPER POSITION</p>
+              <h2 class="card-title">Real-Time Risk Management</h2>
+            </div>
+            <span id="home-pos-ws-badge" class="status-pill ws-pill">Standby — no active position</span>
+          </div>
+          <div id="home-active-position-slot" class="position-slot">
+            <div class="empty-position-state">
+              <span class="empty-icon">🛡️</span>
+              <strong>No Active Position</strong>
+              <p>Waiting for qualified setup meeting confluence criteria (>= 65 pts).</p>
+            </div>
+          </div>
+        </section>
+
+        <!-- 4. Autonomous Auto-Trade Ribbon -->
+        <section class="card autotrade-card" id="home-autotrade-card">
+          <div class="autotrade-row">
+            <div class="autotrade-info">
+              <div class="autotrade-headline">
+                <span class="status-indicator-dot" id="home-at-dot"></span>
+                <strong id="home-at-title">AUTO-TRADE: OFF (PAPER)</strong>
+              </div>
+              <p id="home-at-sub">Protected by Risk Guardian & 6 Hard Circuit Breakers</p>
+            </div>
+            <button class="pill-action-btn" id="home-configure-risk-btn">View Risk Center →</button>
+          </div>
+        </section>
+
+      </div>
+    </section>
+
+    <!-- ══════════════════════════════════════════════════════════════════════ -->
+    <!-- SCREEN 2 — SCANNER                                                    -->
+    <!-- ══════════════════════════════════════════════════════════════════════ -->
+    <section id="scanner-screen" class="screen tab-screen" aria-label="Scanner Intelligence">
+      <div class="screen-scroll">
+        <div class="section-heading">
+          <div>
+            <p class="card-eyebrow">INTELLIGENCE CENTER</p>
+            <h2 class="screen-heading">Opportunity Scanner (<span id="scanner-total-count">0</span>)</h2>
+          </div>
+        </div>
+
+        <!-- Search & Filter Controls -->
+        <div class="scanner-toolbar">
+          <div class="search-input-wrap">
+            <span class="search-icon">🔍</span>
+            <input id="scanner-search-input" type="text" placeholder="Search symbol (e.g. BTC, ETH, SOL, BONK)..." autocomplete="off">
+            <button id="scanner-search-clear" class="search-clear-btn" style="display:none">✕</button>
+          </div>
+
+          <!-- Category Filters: Qualified, Watching, Rejected, Unavailable, All -->
+          <div class="pill-group" id="scanner-category-filters">
+            <button class="filter-pill active" data-cat="all">All</button>
+            <button class="filter-pill" data-cat="qualified">Qualified</button>
+            <button class="filter-pill" data-cat="watching">Watching</button>
+            <button class="filter-pill" data-cat="rejected">Rejected</button>
+            <button class="filter-pill" data-cat="unavailable">Unavailable</button>
+          </div>
+        </div>
+
+        <!-- Opportunities Grid -->
+        <div id="scanner-cards-container" class="scanner-cards-container">
+          <article class="scanner-card-item skeleton-card"></article>
+          <article class="scanner-card-item skeleton-card"></article>
+        </div>
+      </div>
+    </section>
+
+    <!-- ══════════════════════════════════════════════════════════════════════ -->
+    <!-- SCREEN 3 — TRADES                                                     -->
+    <!-- ══════════════════════════════════════════════════════════════════════ -->
+    <section id="trades-screen" class="screen tab-screen" aria-label="Trades and Execution">
+      <div class="screen-scroll">
+        <div class="section-heading">
+          <div>
+            <p class="card-eyebrow">PORTFOLIO EXECUTION</p>
+            <h2 class="screen-heading">Active & Completed Trades</h2>
+          </div>
+        </div>
+
+        <!-- Section 1: Active Paper Trades -->
+        <div class="card trades-section-card">
+          <div class="card-head">
+            <div>
+              <p class="card-eyebrow">OPEN POSITIONS</p>
+              <h3 class="subsection-title">Managed Positions (<span id="trades-open-count">0</span>)</h3>
+            </div>
+            <span id="trades-ws-status" class="status-pill ws-pill">Standby — no active position</span>
+          </div>
+          <div id="trades-active-slot" class="trades-slot">
+            <div class="empty-position-state">
+              <span class="empty-icon">📈</span>
+              <strong>No Active Position</strong>
+              <p>Waiting for qualified setup</p>
+            </div>
+          </div>
+        </div>
+
+        <!-- Section 2: Trade Lifecycle Visual Ladder -->
+        <div class="card lifecycle-card">
+          <div class="card-head">
+            <div>
+              <p class="card-eyebrow">DETERMINISTIC PIPELINE</p>
+              <h3 class="subsection-title">Trade Lifecycle Flow</h3>
+            </div>
+            <span class="status-pill info">VERIFIED PATH</span>
+          </div>
+
+          <div class="lifecycle-pipeline">
+            <div class="pipeline-node active" id="node-signal">
+              <span class="node-num">1</span>
+              <div class="node-content">
+                <strong>Signal</strong>
+                <small>Multi-factor confluence detector (Score >= 65)</small>
+              </div>
+              <span class="node-status-badge complete">READY</span>
+            </div>
+            <div class="pipeline-arrow">↓</div>
+
+            <div class="pipeline-node" id="node-risk">
+              <span class="node-num">2</span>
+              <div class="node-content">
+                <strong>Risk Validation</strong>
+                <small>Risk Guardian hard checks (DD, leverage, slots)</small>
+              </div>
+              <span class="node-status-badge complete">ACTIVE</span>
+            </div>
+            <div class="pipeline-arrow">↓</div>
+
+            <div class="pipeline-node" id="node-execution">
+              <span class="node-num">3</span>
+              <div class="node-content">
+                <strong>Paper Execution</strong>
+                <small>OEM -> EndpointGuard -> Paper Adapter simulated fill</small>
+              </div>
+              <span class="node-status-badge complete">STANDBY</span>
+            </div>
+            <div class="pipeline-arrow">↓</div>
+
+            <div class="pipeline-node" id="node-management">
+              <span class="node-num">4</span>
+              <div class="node-content">
+                <strong>Position Management</strong>
+                <small>Mark-to-market tracking & 1s streaming telemetry</small>
+              </div>
+              <span class="node-status-badge">STANDBY</span>
+            </div>
+            <div class="pipeline-arrow">↓</div>
+
+            <div class="pipeline-node" id="node-autoclose">
+              <span class="node-num">5</span>
+              <div class="node-content">
+                <strong>Trailing / Auto-close</strong>
+                <small>Ratcheted trailing stop & alert-then-autoclose override</small>
+              </div>
+              <span class="node-status-badge">STANDBY</span>
+            </div>
+            <div class="pipeline-arrow">↓</div>
+
+            <div class="pipeline-node" id="node-journal">
+              <span class="node-num">6</span>
+              <div class="node-content">
+                <strong>Journal</strong>
+                <small>Append-only immutable record & learning proposal</small>
+              </div>
+              <span class="node-status-badge complete">LOGGED</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Section 3: Trade History -->
+        <div class="card history-section-card">
+          <div class="card-head">
+            <div>
+              <p class="card-eyebrow">AUDIT RECORD</p>
+              <h3 class="subsection-title">Trade History (<span id="trades-history-count">0</span>)</h3>
+            </div>
+          </div>
+          <div id="trades-history-slot" class="history-slot">
+            <p class="empty-copy">No completed trades yet</p>
+          </div>
+        </div>
+
+      </div>
+    </section>
+
+    <!-- ══════════════════════════════════════════════════════════════════════ -->
+    <!-- SCREEN 4 — RISK CENTER                                                -->
+    <!-- ══════════════════════════════════════════════════════════════════════ -->
+    <section id="risk-screen" class="screen tab-screen" aria-label="Risk Center">
+      <div class="screen-scroll">
+        <div class="section-heading">
+          <div>
+            <p class="card-eyebrow">GUARDIAN ARCHITECTURE</p>
+            <h2 class="screen-heading">Risk & Safety Core</h2>
+          </div>
+          <span class="status-pill safe-pill" id="risk-guardian-badge">VETO AUTHORITY ACTIVE</span>
+        </div>
+
+        <!-- Safety Chain Card -->
+        <div class="card safety-chain-card">
+          <div class="card-head">
+            <div>
+              <p class="card-eyebrow">NON-BYPASSABLE SAFETY CHAIN</p>
+              <h3 class="subsection-title">Execution Authority Path</h3>
+            </div>
+            <span class="provenance-pill">STRICT ORDER</span>
+          </div>
+
+          <div class="safety-chain-flow">
+            <div class="chain-step">
+              <div class="chain-step-badge">1</div>
+              <div class="chain-step-info">
+                <strong>RiskGuardian</strong>
+                <small>Final veto authority over every order intent</small>
+              </div>
+              <span class="status-indicator-tag verified">VETO READY</span>
+            </div>
+            <div class="chain-arrow">↓</div>
+
+            <div class="chain-step">
+              <div class="chain-step-badge">2</div>
+              <div class="chain-step-info">
+                <strong>OrderExecutionManager</strong>
+                <small>Linear order gateway; enforces PAPER mode routing</small>
+              </div>
+              <span class="status-indicator-tag verified">LINEAR OEM</span>
+            </div>
+            <div class="chain-arrow">↓</div>
+
+            <div class="chain-step">
+              <div class="chain-step-badge">3</div>
+              <div class="chain-step-info">
+                <strong>EndpointGuard</strong>
+                <small>Target-endpoint isolation; blocks all live trading URLs</small>
+              </div>
+              <span class="status-indicator-tag verified">ISOLATED</span>
+            </div>
+            <div class="chain-arrow">↓</div>
+
+            <div class="chain-step">
+              <div class="chain-step-badge">4</div>
+              <div class="chain-step-info">
+                <strong>Paper Adapter</strong>
+                <small>Simulated execution engine; zero credentials or keys</small>
+              </div>
+              <span class="status-indicator-tag verified">SIMULATED</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Risk Policy Boundaries -->
+        <div class="card policy-card">
+          <div class="card-head">
+            <div>
+              <p class="card-eyebrow">FIXED POLICY PARAMETERS</p>
+              <h3 class="subsection-title">Authoritative Bounds</h3>
+            </div>
+          </div>
+
+          <div class="metrics-grid two-col">
+            <div class="metric-cell">
+              <span class="cell-label">RISK PER TRADE</span>
+              <strong id="risk-per-trade-val" class="cell-val">1.00%</strong>
+              <small class="cell-sub">Fixed equity policy</small>
+            </div>
+            <div class="metric-cell">
+              <span class="cell-label">MAX DAILY DRAWDOWN</span>
+              <strong id="risk-max-dd-val" class="cell-val">2.00%</strong>
+              <small class="cell-sub">Kill limit: 3.00%</small>
+            </div>
+            <div class="metric-cell">
+              <span class="cell-label">CURRENT DAILY DD</span>
+              <strong id="risk-curr-dd-val" class="cell-val">0.00%</strong>
+              <small class="cell-sub">Drawdown deficit</small>
+            </div>
+            <div class="metric-cell">
+              <span class="cell-label">KILL SWITCH STATE</span>
+              <strong id="risk-ks-state-val" class="cell-val healthy-color">ARMED & NORMAL</strong>
+              <small class="cell-sub" id="risk-ks-reason">Fail-closed</small>
+            </div>
+            <div class="metric-cell">
+              <span class="cell-label">AUTO-TRADE STATE</span>
+              <strong id="risk-at-state-val" class="cell-val">STANDBY (PAPER)</strong>
+              <small class="cell-sub">Autonomous paper loop</small>
+            </div>
+            <div class="metric-cell">
+              <span class="cell-label">ENDPOINT MODE</span>
+              <strong id="risk-endpoint-mode-val" class="cell-val">ISOLATED_PAPER</strong>
+              <small class="cell-sub">Live trading prohibited</small>
+            </div>
+            <div class="metric-cell">
+              <span class="cell-label">RUNTIME MODE</span>
+              <strong id="risk-runtime-mode-val" class="cell-val">PAPER</strong>
+              <small class="cell-sub">Authoritative mode</small>
+            </div>
+            <div class="metric-cell">
+              <span class="cell-label">CONCURRENT SLOTS</span>
+              <strong id="risk-slots-val" class="cell-val">0 / 2</strong>
+              <small class="cell-sub">Max slots cap</small>
+            </div>
+          </div>
+        </div>
+
+        <!-- Hard Circuit Breakers Panel -->
+        <div class="card circuit-breakers-card">
+          <div class="card-head">
+            <div>
+              <p class="card-eyebrow">CIRCUIT BREAKER STATUS</p>
+              <h3 class="subsection-title">Hard Fail-Safe Monitors</h3>
+            </div>
+            <span id="risk-breaker-overall-badge" class="status-pill">ARMED & NORMAL</span>
+          </div>
+
+          <div class="breaker-list">
+            <div class="breaker-item">
+              <div class="breaker-info">
+                <strong>Consecutive Realized Losses Breaker</strong>
+                <small>Auto-trips after max losses; auto-resets on realized profit</small>
+              </div>
+              <span id="breaker-losses-stat" class="breaker-stat">0 / 3</span>
+            </div>
+            <div class="breaker-item">
+              <div class="breaker-info">
+                <strong>Daily Drawdown Breaker</strong>
+                <small>Trips immediately if equity drops past threshold</small>
+              </div>
+              <span id="breaker-dd-stat" class="breaker-stat">0.00% / 2.00%</span>
+            </div>
+            <div class="breaker-item">
+              <div class="breaker-info">
+                <strong>Signal Staleness Guard</strong>
+                <small>Rejects closed-candle signals older than threshold</small>
+              </div>
+              <span class="breaker-stat">180s limit</span>
+            </div>
+            <div class="breaker-item">
+              <div class="breaker-info">
+                <strong>Volatility Surge Breaker</strong>
+                <small>Rejects setups with abnormal single-candle surge</small>
+              </div>
+              <span class="breaker-stat">5.0% / 3.0x ATR</span>
+            </div>
+            <div class="breaker-item">
+              <div class="breaker-info">
+                <strong>Per-Symbol Cooldown Guard</strong>
+                <small>Prevents rapid-fire orders on same symbol</small>
+              </div>
+              <span class="breaker-stat">300s cooldown</span>
+            </div>
+          </div>
+
+          <div class="audit-rejections-block">
+            <p class="card-eyebrow">RECENT SAFETY AUDIT REJECTIONS</p>
+            <div id="risk-recent-rejections" class="audit-list">
+              <p class="empty-copy">No recent safety rejections (All gates passed)</p>
+            </div>
+          </div>
+        </div>
+
+        <!-- Alert-Then-Autoclose Real-Time Controls -->
+        <div class="card autoclose-config-card">
+          <div class="card-head">
+            <div>
+              <p class="card-eyebrow">RISK OVERRIDE PROTOCOL</p>
+              <h3 class="subsection-title">Alert-Then-Autoclose (24/7)</h3>
+            </div>
+            <span class="status-pill safe-pill">ACTIVE</span>
+          </div>
+          <p class="card-desc">Upon genuine risk (SL breach, adverse cascade, funding flip), system alerts and begins countdown. Manual "HOLD" keeps trade open; otherwise closes safely upon grace expiry.</p>
+
+          <div class="metrics-grid two-col">
+            <div class="metric-cell">
+              <span class="cell-label">GRACE PERIOD</span>
+              <strong class="cell-val">60 seconds</strong>
+              <small class="cell-sub">User override window</small>
+            </div>
+            <div class="metric-cell">
+              <span class="cell-label">TRAILING STOP LADDER</span>
+              <strong class="cell-val">DYNAMIC</strong>
+              <small class="cell-sub">+1.0R -> BE, +1.5R -> +0.75R, +2R -> +1.25R, +3R -> +2R</small>
+            </div>
+            <div class="metric-cell">
+              <span class="cell-label">ADVERSE LIQ THRESHOLD</span>
+              <strong class="cell-val">$50,000 USD</strong>
+              <small class="cell-sub">Cascade trigger window (60s)</small>
+            </div>
+            <div class="metric-cell">
+              <span class="cell-label">ACTIVE RISK ALERTS</span>
+              <strong id="risk-active-alerts-count" class="cell-val">0 alerts</strong>
+              <small class="cell-sub">Grace period countdowns</small>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </section>
+
+    <!-- ══════════════════════════════════════════════════════════════════════ -->
+    <!-- SCREEN 5 — SYSTEM                                                     -->
+    <!-- ══════════════════════════════════════════════════════════════════════ -->
+    <section id="system-screen" class="screen tab-screen" aria-label="System Health">
+      <div class="screen-scroll">
+        <div class="section-heading">
+          <div>
+            <p class="card-eyebrow">TELEMETRY & HEALTH</p>
+            <h2 class="screen-heading">System Status</h2>
+          </div>
+          <span class="status-pill healthy" id="system-overall-badge">ONLINE</span>
+        </div>
+
+        <!-- 1. Runtime Card -->
+        <div class="card system-card">
+          <div class="card-head">
+            <div>
+              <p class="card-eyebrow">RUNTIME ENVIRONMENT</p>
+              <h3 class="subsection-title">Autonomous Core</h3>
+            </div>
+            <span class="provenance-pill">AUTHORITATIVE</span>
+          </div>
+          <div class="metrics-grid two-col">
+            <div class="metric-cell">
+              <span class="cell-label">TRADING MODE</span>
+              <strong class="cell-val">PAPER</strong>
+              <small class="cell-sub">Live trading permanently blocked</small>
+            </div>
+            <div class="metric-cell">
+              <span class="cell-label">ENGINE STATE</span>
+              <strong id="sys-engine-state" class="cell-val">RUNNING</strong>
+              <small class="cell-sub">Deterministic state machine</small>
+            </div>
+            <div class="metric-cell">
+              <span class="cell-label">SCANNER STATE</span>
+              <strong id="sys-scanner-state" class="cell-val">CONTINUOUS</strong>
+              <small class="cell-sub">100 USDT-M universe</small>
+            </div>
+            <div class="metric-cell">
+              <span class="cell-label">TIMEFRAME</span>
+              <strong class="cell-val">5m Closed Candles</strong>
+              <small class="cell-sub">Pure closed candles, zero lookahead</small>
+            </div>
+          </div>
+        </div>
+
+        <!-- 2. Market Data Card -->
+        <div class="card system-card">
+          <div class="card-head">
+            <div>
+              <p class="card-eyebrow">MARKET DATA TELEMETRY</p>
+              <h3 class="subsection-title">Connection & Quality</h3>
+            </div>
+            <span class="status-pill healthy" id="sys-market-badge">HEALTHY</span>
+          </div>
+          <div class="metrics-grid two-col">
+            <div class="metric-cell">
+              <span class="cell-label">CONNECTION HEALTH</span>
+              <strong id="sys-conn-health" class="cell-val healthy-color">HEALTHY</strong>
+              <small class="cell-sub">Public Binance REST (No keys)</small>
+            </div>
+            <div class="metric-cell">
+              <span class="cell-label">LAST SUCCESSFUL SCAN</span>
+              <strong id="sys-last-success-scan" class="cell-val">Just now</strong>
+              <small class="cell-sub">Timestamp verified</small>
+            </div>
+            <div class="metric-cell">
+              <span class="cell-label">SCAN LATENCY</span>
+              <strong id="sys-scan-latency" class="cell-val">— ms</strong>
+              <small class="cell-sub">100 symbol batch pass</small>
+            </div>
+            <div class="metric-cell">
+              <span class="cell-label">FAILURE COUNT</span>
+              <strong id="sys-failure-count" class="cell-val">0 failures</strong>
+              <small class="cell-sub">Data / Execution failures</small>
+            </div>
+          </div>
+        </div>
+
+        <!-- 3. API & WebSocket Health Card -->
+        <div class="card system-card">
+          <div class="card-head">
+            <div>
+              <p class="card-eyebrow">INTERFACES & TRANSPORT</p>
+              <h3 class="subsection-title">API & WebSocket</h3>
+            </div>
+          </div>
+          <div class="metrics-grid two-col">
+            <div class="metric-cell">
+              <span class="cell-label">INSPECTION API</span>
+              <strong id="sys-api-health" class="cell-val healthy-color">HEALTHY</strong>
+              <small class="cell-sub">Port 8765 (Localhost only)</small>
+            </div>
+            <div class="metric-cell">
+              <span class="cell-label">WEBSOCKET STATUS</span>
+              <strong id="sys-ws-health" class="cell-val info-color">Standby — no active position</strong>
+              <small class="cell-sub">1s markPrice streaming</small>
+            </div>
+            <div class="metric-cell">
+              <span class="cell-label">API SECURITY BINDING</span>
+              <strong class="cell-val">127.0.0.1 ONLY</strong>
+              <small class="cell-sub">Rejects 0.0.0.0 / external IPs</small>
+            </div>
+            <div class="metric-cell">
+              <span class="cell-label">HTTP METHODS</span>
+              <strong class="cell-val">GET ONLY</strong>
+              <small class="cell-sub">Mutations fail 405 Method Not Allowed</small>
+            </div>
+          </div>
+        </div>
+
+        <!-- 4. Observability & Daemon Processes -->
+        <div class="card system-card">
+          <div class="card-head">
+            <div>
+              <p class="card-eyebrow">DAEMON SUPERVISION</p>
+              <h3 class="subsection-title">Observability & Services</h3>
+            </div>
+          </div>
+          <div class="service-status-list">
+            <div class="service-item">
+              <div class="service-meta">
+                <strong>24-Hour Telemetry Monitor</strong>
+                <small>apex-24h-monitor.service (run_timeseries.jsonl)</small>
+              </div>
+              <span class="status-indicator-tag active">RUNNING</span>
+            </div>
+            <div class="service-item">
+              <div class="service-meta">
+                <strong>Apex Inspection API Server</strong>
+                <small>apex-api.service (Port 8765)</small>
+              </div>
+              <span class="status-indicator-tag active">ACTIVE</span>
+            </div>
+            <div class="service-item">
+              <div class="service-meta">
+                <strong>Mini App Gateway & Server</strong>
+                <small>binance-miniapp-server.service (Port 8008)</small>
+              </div>
+              <span class="status-indicator-tag active">ACTIVE</span>
+            </div>
+            <div class="service-item">
+              <div class="service-meta">
+                <strong>Cloudflare Secure Tunnel</strong>
+                <small>cloudflared-miniapp.service</small>
+              </div>
+              <span class="status-indicator-tag active">ONLINE</span>
+            </div>
+            <div class="service-item">
+              <div class="service-meta">
+                <strong>Persistent Event Journal</strong>
+                <small>SQLite WAL (var/apex_service.db)</small>
+              </div>
+              <span class="status-indicator-tag verified">RECOVERY READY</span>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </section>
+
+    <!-- ══════════════════════════════════════════════════════════════════════ -->
+    <!-- SCREEN 6 — MANAGEMENT TEAM (8 AGENTS)                                 -->
+    <!-- ══════════════════════════════════════════════════════════════════════ -->
+    <section id="team-screen" class="screen tab-screen" aria-label="Management Team">
+      <div class="screen-scroll">
+        <div class="disclaimer-banner">
+          <span>👔</span>
+          <span><b>8-AGENT MANAGEMENT TEAM</b> — Autonomous specialized operations. Zero direct execution bypass. All trading intents route strictly through RiskGuardian.</span>
+        </div>
+
+        <div class="card">
+          <div class="card-head">
+            <div>
+              <p class="card-eyebrow">GOVERNANCE & ORCHESTRATION</p>
+              <h2 class="card-title">Specialized Autonomous Agents</h2>
+            </div>
+            <span class="status-pill" id="team-active-pill">8 AGENTS OPERATIONAL</span>
+          </div>
+          <div class="agent-grid" id="team-agents-grid">
+            <!-- Dynamically populated by app.js -->
+            <p class="empty-copy">Loading agent telemetry…</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ══════════════════════════════════════════════════════════════════════ -->
+    <!-- SCREEN 7 — INVESTMENT RESEARCH ORGANIZATION                           -->
+    <!-- ══════════════════════════════════════════════════════════════════════ -->
+    <section id="investment-screen" class="screen tab-screen" aria-label="Investment Research">
+      <div class="screen-scroll">
+        <div class="disclaimer-banner">
+          <span>⚠️</span>
+          <span><b>RESEARCH & ANALYSIS ONLY — NEVER DIRECTLY EXECUTED</b>. Multi-month fundamental theses and target core portfolio model.</span>
+        </div>
+
+        <div class="card">
+          <div class="card-head">
+            <div>
+              <p class="card-eyebrow">STRATEGIC MACRO MODEL</p>
+              <h2 class="card-title">Target Core Allocations</h2>
+            </div>
+            <span class="status-pill">RESEARCH MODEL</span>
+          </div>
+          <div class="metrics-grid" style="grid-template-columns: repeat(3, 1fr);">
+            <div class="metric-cell">
+              <span class="cell-label">STORE OF VALUE (BTC)</span>
+              <strong class="cell-val">45.0%</strong>
+            </div>
+            <div class="metric-cell">
+              <span class="cell-label">SMART CONTRACTS (ETH/SOL)</span>
+              <strong class="cell-val">35.0%</strong>
+            </div>
+            <div class="metric-cell">
+              <span class="cell-label">DECENTRALIZED AI (TAO)</span>
+              <strong class="cell-val">20.0%</strong>
+            </div>
+          </div>
+        </div>
+
+        <div class="card" style="margin-top: 12px;">
+          <div class="card-head">
+            <div>
+              <p class="card-eyebrow">ACTIVE ASSET THESES</p>
+              <h2 class="card-title">Fundamental Accumulation Profiles</h2>
+            </div>
+            <span class="status-pill" id="theses-count-pill">4 THESES</span>
+          </div>
+          <div class="theses-grid" id="investment-theses-grid">
+            <!-- Dynamically populated by app.js -->
+            <p class="empty-copy">Loading investment theses…</p>
+          </div>
+        </div>
+
+        <div class="card" style="margin-top: 12px;">
+          <div class="card-head">
+            <div>
+              <p class="card-eyebrow">MONITORED UNIVERSE</p>
+              <h2 class="card-title">Research Watchlist</h2>
+            </div>
+          </div>
+          <div id="investment-watchlist-container" class="metrics-grid four-col" style="margin-top: 8px;">
+            <!-- Dynamically populated by app.js -->
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ══════════════════════════════════════════════════════════════════════ -->
+    <!-- SCREEN 8 — ALERTS & ACTIVE GRACE PERIODS                              -->
+    <!-- ══════════════════════════════════════════════════════════════════════ -->
+    <section id="alerts-screen" class="screen tab-screen" aria-label="Alerts & Overrides">
+      <div class="screen-scroll">
+        <div class="card">
+          <div class="card-head">
+            <div>
+              <p class="card-eyebrow">ACTIVE SAFETY ALERTS</p>
+              <h2 class="card-title">Grace Period Interventions</h2>
+            </div>
+            <span class="status-pill" id="active-alerts-pill">0 ACTIVE</span>
+          </div>
+          <div id="active-alerts-list" class="signals-list">
+            <p class="empty-copy">No active grace-period alerts right now.</p>
+          </div>
+        </div>
+
+        <div class="card" style="margin-top: 12px;">
+          <div class="card-head">
+            <div>
+              <p class="card-eyebrow">TELEGRAM DISPATCHER</p>
+              <h2 class="card-title">Alert Notification Categories</h2>
+            </div>
+            <span class="status-pill" id="tg-dispatcher-status-pill">CONNECTED</span>
+          </div>
+          <div id="alert-categories-grid" class="metrics-grid" style="grid-template-columns: repeat(2, 1fr); margin-top: 10px;">
+            <!-- Dynamically populated by app.js -->
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ══════════════════════════════════════════════════════════════════════ -->
+    <!-- SCREEN 9 — IMMUTABLE AUDIT TRAIL                                      -->
+    <!-- ══════════════════════════════════════════════════════════════════════ -->
+    <section id="audit-screen" class="screen tab-screen" aria-label="Audit Events">
+      <div class="screen-scroll">
+        <div class="card">
+          <div class="card-head">
+            <div>
+              <p class="card-eyebrow">IMMUTABLE AUDIT TRAIL</p>
+              <h2 class="card-title">Chronological Operational Log</h2>
+            </div>
+            <span class="status-pill" id="audit-event-count">LIVE LOG</span>
+          </div>
+          <p class="equity-detail">Append-only audit log with correlation IDs persisted in var/audit_events.jsonl</p>
+          <div class="audit-list" id="audit-events-list">
+            <!-- Dynamically populated by app.js -->
+            <p class="empty-copy">Loading audit trail events…</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ══════════════════════════════════════════════════════════════════════ -->
+    <!-- TOUCH-FRIENDLY BOTTOM NAVIGATION                                      -->
+    <!-- ══════════════════════════════════════════════════════════════════════ -->
+    <nav class="tabbar" aria-label="Main navigation">
+      <button class="tab-button active" data-tab="home"><span>⚡</span>Command</button>
+      <button class="tab-button" data-tab="team"><span>👔</span>Team</button>
+      <button class="tab-button" data-tab="scanner"><span>🔍</span>Market</button>
+      <button class="tab-button" data-tab="trades"><span>📈</span>Trading</button>
+      <button class="tab-button" data-tab="investment"><span>🏛️</span>Invest</button>
+      <button class="tab-button" data-tab="risk"><span>🛡️</span>Risk</button>
+      <button class="tab-button" data-tab="alerts"><span>🔔</span>Alerts</button>
+      <button class="tab-button" data-tab="audit"><span>📜</span>Audit</button>
+    </nav>
+  </main>
+
+  <!-- ════════════════════════════════════════════════════════════════════════ -->
+  <!-- MODALS & DRAWERS                                                         -->
+  <!-- ════════════════════════════════════════════════════════════════════════ -->
+
+  <!-- Modal 1: VIEW ANALYSIS Modal -->
+  <dialog id="analysis-dialog" class="modal-dialog">
+    <div class="pinpoint-header">
+      <div>
+        <p class="card-eyebrow" id="analysis-subtitle">OPPORTUNITY ANALYSIS</p>
+        <h2 id="analysis-title" class="modal-title">BTCUSDT (LONG)</h2>
+      </div>
+      <button id="close-analysis-x" class="icon-button" aria-label="Close modal">✕</button>
+    </div>
+    <div id="analysis-body" class="pinpoint-scroll"></div>
+    <div class="dialog-actions">
+      <button id="close-analysis-btn" class="secondary">Close</button>
+      <button id="prepare-order-btn" class="primary">Ask AI About Setup →</button>
+    </div>
+  </dialog>
+
+  <!-- Modal 2: Grounded Chat Assistant Drawer -->
+  <dialog id="chat-drawer" class="drawer-dialog">
+    <div class="drawer-header">
+      <div>
+        <p class="card-eyebrow">GROUNDED ANALYSIS</p>
+        <h2 class="modal-title">Apex Assistant</h2>
+      </div>
+      <button id="close-chat-drawer" class="icon-button" aria-label="Close drawer">✕</button>
+    </div>
+    <div id="connection" class="connection"><span></span> Connecting…</div>
+    <div id="messages" class="messages" aria-live="polite">
+      <article class="message assistant">
+        <div class="avatar">A</div>
+        <div class="bubble">Hi — I am your Apex Assistant. Ask about live signals, circuit breaker triggers, or portfolio risk. All signals and outputs are strictly advisory; execution requires explicit operator confirmation in PAPER mode.</div>
+      </article>
+    </div>
+    <div id="quick-actions" class="quick-actions">
+      <button data-prompt="Why did BTCUSDT alert just now?">Why BTC Alert?</button>
+      <button data-prompt="Show my current exposure and open positions.">Current Exposure</button>
+      <button data-prompt="Explain the last circuit breaker trigger and fail-safe status.">Circuit Breakers</button>
+      <button data-prompt="What is the current safe auto-trade status and audit log?">Auto-Trade Status</button>
+      <button data-prompt="Trade plan for BTCUSDT">BTC Plan</button>
+    </div>
+    <form id="chat-form" class="composer">
+      <textarea id="message-input" rows="1" placeholder="Ask about signals, circuit breakers, or risk…" maxlength="4000"></textarea>
+      <button type="submit" aria-label="Send message">↑</button>
+    </form>
+  </dialog>
+
+  <!-- Modal 3: Confirmation Dialog -->
+  <dialog id="confirm-dialog" class="modal-dialog">
+    <div class="dialog-icon">!</div>
+    <p class="card-eyebrow">CONFIRM ACTION</p>
+    <h2>Review before dispatch</h2>
+    <p id="confirm-request" class="confirm-body"></p>
+    <p class="warning">This will dispatch a simulated PAPER trade intent through Risk Guardian. Live trading is permanently disabled.</p>
+    <div class="dialog-actions">
+      <button id="cancel-confirm" class="secondary">Cancel</button>
+      <button id="approve-confirm" class="danger">I confirm (PAPER)</button>
+    </div>
+  </dialog>
+
+  <script src="/assets/app.js"></script>
+</body>
+</html>

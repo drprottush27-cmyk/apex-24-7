@@ -1,0 +1,82 @@
+# APEX 24/7 — production systemd unit (P2-16)
+#
+# This hardened unit runs the single-process APEX control plane (FastAPI/uvicorn).
+# PostgreSQL and Redis are expected to be running as Docker containers reachable
+# on 127.0.0.1 (see /home/apex/apex/docker-compose.yml).
+#
+# SECURITY MODEL
+#   * Runs as the non-root 'apex' user with an explicit WorkingDirectory.
+#   * The application loads its own configuration from /home/apex/apex/.env
+#     (gitignored) at runtime via pydantic-settings. systemd therefore NEVER
+#     holds environment secrets and there is no Environment= directive that
+#     could expose credentials.
+#   * This unit does NOT enable live trading and does NOT set any live-trading
+#     override (no LIVE trading mode, no live-trading enable flag, no
+#     auto-execute flag). Those safe defaults are enforced by the application's
+#     own fail-closed configuration.
+#   * Graceful shutdown runs on SIGTERM: uvicorn triggers the FastAPI lifespan
+#     teardown, which engages the kill switch first (fail closed) before
+#     stopping the data feed and orchestrator.
+#   * Restart policy is bounded (StartLimitBurst / StartLimitIntervalSec) so a
+#     transient crash recovers without an uncontrolled restart loop.
+#
+# Installation: see deployment/systemd/INSTALL.md
+[Unit]
+Description=APEX 24/7 Quantitative Trading Desk Control Plane
+Documentation=file:/home/apex/apex/deployment/systemd/INSTALL.md
+After=network-online.target docker.service
+Wants=network-online.target docker.service
+StartLimitIntervalSec=300
+StartLimitBurst=5
+
+[Service]
+Type=simple
+
+# Non-root execution
+User=apex
+Group=apex
+
+# Explicit working directory (prevents accidental execution from an unexpected cwd)
+WorkingDirectory=/home/apex/apex
+
+# Fail-closed startup guard: only start if the venv binary and the app config
+# file exist. `test` is a real binary, not a shell.
+ExecStartPre=/usr/bin/test -x /home/apex/apex/.venv/bin/uvicorn
+ExecStartPre=/usr/bin/test -r /home/apex/apex/.env
+
+# Direct venv binary — no shell wrapper, no sub-shell, clean signal propagation.
+ExecStart=/home/apex/apex/.venv/bin/uvicorn api.app:app --host 127.0.0.1 --port 8000
+
+# Bounded restart: recover from transient failures but never loop uncontrolled.
+Restart=on-failure
+RestartSec=5
+
+# Graceful shutdown on SIGTERM (uvicorn -> FastAPI lifespan -> GracefulShutdown).
+# Allow up to 30s for the bounded shutdown sequence before systemd forces SIGKILL.
+TimeoutStopSec=30
+TimeoutStartSec=60
+
+# Allow the app to open sockets (DB, Redis, Binance WS, Ollama) and bind its
+# control-plane port; restrict the address families that are available.
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+
+# Least-privilege hardening.
+NoNewPrivileges=true
+ProtectSystem=strict
+PrivateTmp=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+ProtectClock=true
+RestrictSUIDSGID=true
+RestrictRealtime=true
+LockPersonality=true
+CapabilityBoundingSet=
+SystemCallArchitectures=native
+UMask=0077
+
+# File descriptor ceiling (WebSocket / network connections).
+LimitNOFILE=65536
+
+[Install]
+WantedBy=multi-user.target

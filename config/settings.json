@@ -1,0 +1,28 @@
+{
+  "symbols": [
+    "BTCUSDT",
+    "ETHUSDT"
+  ],
+  "alert_threshold_percent": 3.0,
+  "echo_trade_confirmations": true,
+  "auto_trade": {
+    "enabled": true,
+    "risk_per_trade_pct": 1.0,
+    "min_score": 65.0,
+    "max_daily_drawdown_pct": 2.0,
+    "max_consecutive_losses": 3,
+    "max_signal_age_seconds": 180,
+    "max_candle_surge_pct": 5.0,
+    "cooldown_seconds": 300
+  },
+  "autoclose": {
+    "enabled": true,
+    "grace_period_seconds": 60,
+    "trailing_stop_enabled": true,
+    "trailing_activation_r": 1.0,
+    "trailing_step_r": 0.5,
+    "adverse_liquidation_threshold_usd": 50000.0,
+    "funding_inversion_threshold": 0.0005,
+    "volatility_spike_pct": 0.02
+  }
+}

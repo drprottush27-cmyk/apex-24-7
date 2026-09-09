@@ -1,0 +1,18 @@
+[Unit]
+Description=Apex Automated Quantitative Trading Desk Daemon
+After=network.target docker.service
+Requires=docker.service
+
+[Service]
+Type=simple
+User=apex
+WorkingDirectory=/home/apex/apex
+EnvironmentFile=/home/apex/apex/.env
+ExecStart=/home/apex/apex/scripts/run_desk.sh
+Restart=always
+RestartSec=5
+KillMode=process
+LimitNOFILE=65536
+
+[Install]
+WantedBy=multi-user.target
