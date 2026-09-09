@@ -14,11 +14,6 @@ from apex.runtime.auto_trade import (
 )
 from apex.safety.kill_switch import KillSwitch
 
-# Add miniapp to sys.path for testing server routing logic
-MINIAPP_PATH = Path("/root/binance-agent/miniapp")
-if str(MINIAPP_PATH) not in sys.path:
-    sys.path.insert(0, str(MINIAPP_PATH))
-
 
 def make_test_candle(
     open_p: float = 100.0,
