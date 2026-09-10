@@ -1,0 +1,42 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Environment/secrets
+.env
+.env.*
+!.env.example
+
+# Runtime
+*.log
+*.pid
+*.sqlite
+*.db
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+
+# Build
+dist/
+build/
+*.egg-info/
+
+# Agent/runtime state
+.agentic/runtime/
+.agentic/sessions/
+.agentic/tmp/
+
+# Secrets
+*.pem
+*.key
+credentials.json
+secrets.json
