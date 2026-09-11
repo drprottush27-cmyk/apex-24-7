@@ -72,7 +72,7 @@ class AegisLiveScanner:
             action_str = "BUY" if sig.signal_type == SignalType.BUY else "SELL"
             
             signal_id = f"AEGIS-{symbol}-{int(now.timestamp())}"
-            approved, qty, reason = self.risk_engine.validate_and_size(
+            approved, qty, reason, tp_price = self.risk_engine.authorize_and_enter(
                 symbol=symbol,
                 action=action_str,
                 entry_price=price,
@@ -84,12 +84,7 @@ class AegisLiveScanner:
                 logging.info(f"Signal for {symbol} rejected by Risk Guardian: {reason}")
                 continue
 
-            # Deterministic Target: 2:1 RR
-            sl_dist = abs(price - sl_price)
-            tp_price = round(price + (sl_dist * 2) if action_str == "BUY" else price - (sl_dist * 2), 2)
-            
             logging.info(f"🚀 [GO SIGNAL] Deterministic setup confirmed for {symbol} @ ${price:.2f}")
-            self.risk_engine.register_entry(symbol, action_str, qty, price, sl_price, tp_price)
 
             trade = TradeRecord(
                 trade_id=str(int(now.timestamp())),
