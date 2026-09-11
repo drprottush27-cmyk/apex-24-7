@@ -12,6 +12,7 @@ Timeframe = NewType("Timeframe", str)
 class ProviderName(str, enum.Enum):
     BINANCE = "binance"
     OKX = "okx"
+    BYBIT = "bybit"
 
 
 def _validate_decimal(value: object, name: str) -> Decimal:

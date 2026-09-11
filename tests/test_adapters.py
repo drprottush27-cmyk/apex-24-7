@@ -137,13 +137,96 @@ class TestOKXAdapterMapping:
         assert f.rate == Decimal("0.0001")
 
 
+class TestBybitAdapterMapping:
+    @pytest.mark.asyncio
+    async def test_symbols_from_instruments_info(self):
+        from apex.providers.bybit import BybitProvider
+        p = BybitProvider()
+        payload = {
+            "retCode": 0,
+            "result": {
+                "list": [
+                    {"symbol": "BTCUSDT", "status": "Trading"},
+                    {"symbol": "ETHUSDT", "status": "Closed"},
+                ]
+            }
+        }
+        p._get = lambda path: payload
+        symbols = await p.list_symbols()
+        assert symbols == [Symbol("BTCUSDT")]
+
+    @pytest.mark.asyncio
+    async def test_ticker_decimal_parse(self):
+        from apex.providers.bybit import BybitProvider
+        p = BybitProvider()
+        payload = {
+            "retCode": 0,
+            "time": 1700000000000,
+            "result": {
+                "list": [
+                    {
+                        "lastPrice": "64000.55",
+                        "bid1Price": "64000.00",
+                        "ask1Price": "64001.00",
+                        "highPrice24h": "65000",
+                        "lowPrice24h": "63000",
+                        "volume24h": "12345.678",
+                    }
+                ]
+            }
+        }
+        p._get = lambda path: payload
+        t = await p.get_ticker(Symbol("BTCUSDT"))
+        assert t.provider == ProviderName.BYBIT
+        assert t.last_price == Decimal("64000.55")
+        assert isinstance(t.last_price, Decimal)
+
+    @pytest.mark.asyncio
+    async def test_candles_mapping(self):
+        from apex.providers.bybit import BybitProvider
+        p = BybitProvider()
+        payload = {
+            "retCode": 0,
+            "result": {
+                "list": [
+                    ["1700000000000", "100", "105", "99", "104", "50", "5200"]
+                ]
+            }
+        }
+        p._get = lambda path: payload
+        candles = await p.get_candles(Symbol("BTCUSDT"), Timeframe("1h"))
+        assert len(candles) == 1
+        assert candles[0].open == Decimal("100")
+        assert candles[0].close == Decimal("104")
+
+    @pytest.mark.asyncio
+    async def test_order_book_mapping(self):
+        from apex.providers.bybit import BybitProvider
+        p = BybitProvider()
+        payload = {
+            "retCode": 0,
+            "result": {
+                "b": [["100.5", "1.5"]],
+                "a": [["101.5", "2.5"]],
+                "ts": 1700000000000
+            }
+        }
+        p._get = lambda path: payload
+        book = await p.get_order_book(Symbol("BTCUSDT"))
+        assert book.bids[0].price == Decimal("100.5")
+        assert book.asks[0].price == Decimal("101.5")
+
+
 def test_no_order_placement_paths():
     """Read-only providers must not reference order/trade endpoints."""
     import inspect
+    from apex.providers.bybit import BybitProvider
 
     src_binance = inspect.getsource(BinanceProvider)
     src_okx = inspect.getsource(OKXProvider)
-    forbidden = ["/fapi/v1/order", "/api/v5/trade", "place_order"]
+    src_bybit = inspect.getsource(BybitProvider)
+    forbidden = ["/fapi/v1/order", "/api/v5/trade", "/v5/order", "place_order"]
     for needle in forbidden:
         assert needle not in src_binance, f"binance adapter leaks {needle}"
         assert needle not in src_okx, f"okx adapter leaks {needle}"
+        assert needle not in src_bybit, f"bybit adapter leaks {needle}"
