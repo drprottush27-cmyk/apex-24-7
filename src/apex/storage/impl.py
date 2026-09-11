@@ -1,12 +1,19 @@
 from __future__ import annotations
 
 import json
+import re
 from pathlib import Path
 
 from apex.audit.events import AuditEvent
 from apex.audit.log import AuditLog
 from apex.models.market import Candle, OrderBook, Symbol, Ticker
 from apex.storage.base import StorageBackend
+
+# Maximum filename length (conservative cross-platform limit).
+_MAX_FILENAME_LEN = 200
+
+# Allowed characters in storage filenames: alphanumeric, dash, underscore, dot.
+_SAFE_FILENAME_RE = re.compile(r"^[A-Za-z0-9._-]+$")
 
 
 class MemoryStorage(StorageBackend):
@@ -83,15 +90,71 @@ class MemoryAuditLog(AuditLog):
 
 
 class FileStorage(StorageBackend):
+    """File-based storage with security hardening against path traversal,
+    symlink attacks, absolute path injection, and unsafe filenames.
+
+    All file operations are confined to the storage root directory.
+    """
+
     def __init__(self, directory: str) -> None:
-        self._dir = Path(directory)
+        self._dir = Path(directory).resolve()
         self._dir.mkdir(parents=True, exist_ok=True)
 
-    def _path(self, name: str) -> Path:
-        return self._dir / name
+    def _safe_path(self, name: str) -> Path:
+        """Build a safe file path within the storage root.
+
+        Raises ValueError if the name is unsafe:
+        - Contains path separators (/ or \\)
+        - Is an absolute path
+        - Contains traversal sequences (..)
+        - Contains null bytes
+        - Contains only dots (. or ..)
+        - Is empty or whitespace-only
+        - Exceeds maximum filename length
+        - Contains characters outside the safe set
+        - Resolves to a location outside the storage root
+        - Is a symlink pointing outside the storage root
+        """
+        if not name or not name.strip():
+            raise ValueError("filename must not be empty")
+        if "\x00" in name:
+            raise ValueError("filename must not contain null bytes")
+        if "/" in name or "\\" in name:
+            raise ValueError("filename must not contain path separators")
+        if name.startswith(".") and all(c == "." for c in name):
+            raise ValueError("filename must not be a dot-only name")
+        if ".." in name:
+            raise ValueError("filename must not contain '..'")
+        if len(name) > _MAX_FILENAME_LEN:
+            raise ValueError(f"filename exceeds {_MAX_FILENAME_LEN} characters")
+        if not _SAFE_FILENAME_RE.match(name):
+            raise ValueError(f"filename contains unsafe characters: {name!r}")
+
+        candidate = (self._dir / name).resolve()
+
+        # Ensure resolved path is strictly inside the storage root.
+        try:
+            candidate.relative_to(self._dir)
+        except ValueError:
+            raise ValueError(
+                f"resolved path escapes storage root: {candidate}"
+            )
+
+        # Reject if a symlink already exists at this path and points outside root.
+        raw_path = self._dir / name
+        if raw_path.is_symlink():
+            link_target = raw_path.resolve()
+            try:
+                link_target.relative_to(self._dir)
+            except ValueError:
+                raise ValueError(
+                    f"symlink at {raw_path} points outside storage root"
+                )
+
+        return candidate
 
     async def save_ticker(self, ticker: Ticker) -> None:
-        p = self._path(f"ticker_{ticker.symbol}.json")
+        p = self._safe_path(f"ticker_{ticker.symbol}.json")
         p.write_text(json.dumps({
             "symbol": str(ticker.symbol),
             "provider": ticker.provider.value,
@@ -105,7 +168,7 @@ class FileStorage(StorageBackend):
         }))
 
     async def get_ticker(self, symbol: Symbol) -> Ticker | None:
-        p = self._path(f"ticker_{symbol}.json")
+        p = self._safe_path(f"ticker_{symbol}.json")
         if not p.exists():
             return None
         data = json.loads(p.read_text())
@@ -126,7 +189,7 @@ class FileStorage(StorageBackend):
         if not candles:
             return
         c = candles[0]
-        p = self._path(f"candles_{c.symbol}_{c.timeframe}.json")
+        p = self._safe_path(f"candles_{c.symbol}_{c.timeframe}.json")
         existing: list[dict] = []
         if p.exists():
             existing = json.loads(p.read_text())
@@ -149,7 +212,7 @@ class FileStorage(StorageBackend):
     async def get_candles(
         self, symbol: Symbol, timeframe: str, limit: int = 100
     ) -> list[Candle]:
-        p = self._path(f"candles_{symbol}_{timeframe}.json")
+        p = self._safe_path(f"candles_{symbol}_{timeframe}.json")
         if not p.exists():
             return []
         data = json.loads(p.read_text())[-limit:]
@@ -171,7 +234,7 @@ class FileStorage(StorageBackend):
         ]
 
     async def save_order_book(self, book: OrderBook) -> None:
-        p = self._path(f"orderbook_{book.symbol}.json")
+        p = self._safe_path(f"orderbook_{book.symbol}.json")
         p.write_text(json.dumps({
             "symbol": str(book.symbol),
             "provider": book.provider.value,
@@ -181,7 +244,7 @@ class FileStorage(StorageBackend):
         }))
 
     async def get_order_book(self, symbol: Symbol) -> OrderBook | None:
-        p = self._path(f"orderbook_{symbol}.json")
+        p = self._safe_path(f"orderbook_{symbol}.json")
         if not p.exists():
             return None
         data = json.loads(p.read_text())
