@@ -1,14 +1,10 @@
 import asyncio
 import logging
 import os
-import time
 from datetime import datetime, timezone
 from decimal import Decimal
 from typing import Optional, List, Dict
 from dotenv import load_dotenv
-import sys
-from pathlib import Path
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from src.executor import HardenedRiskEngine
 from src.publishers import NotionPublisher
@@ -65,11 +61,83 @@ class AegisLiveScanner:
         if not snapshots:
             return executed_trades
 
-        signals = self.strategy.generate_signals(snapshots)
         now = datetime.now(timezone.utc)
+
+        # 1. Position Exit Evaluation: Check open paper positions against current market prices
+        for symbol in list(self.risk_engine.open_positions.keys()):
+            pos = self.risk_engine.open_positions[symbol]
+            snap = next((s for s in snapshots if s.symbol == symbol), None)
+            if not snap or not snap.is_data_intact or not snap.is_data_fresh:
+                continue
+
+            current_price = float(snap.current_price)
+            action = pos['action'].upper()
+            tp = pos['tp']
+            sl = pos['sl']
+            qty = pos['qty']
+            entry_price = pos['entry_price']
+
+            exit_reason = None
+            exit_price = current_price
+            if action == 'BUY':
+                if current_price >= tp:
+                    exit_reason = "TAKE_PROFIT"
+                    exit_price = tp
+                elif current_price <= sl:
+                    exit_reason = "STOP_LOSS"
+                    exit_price = sl
+            elif action == 'SELL':
+                if current_price <= tp:
+                    exit_reason = "TAKE_PROFIT"
+                    exit_price = tp
+                elif current_price >= sl:
+                    exit_reason = "STOP_LOSS"
+                    exit_price = sl
+
+            if exit_reason:
+                raw_pnl = (exit_price - entry_price) * qty if action == 'BUY' else (entry_price - exit_price) * qty
+                fees = round((entry_price * qty * 0.0004) + (exit_price * qty * 0.0004), 2)
+                realized_pnl = round(raw_pnl - fees, 2)
+
+                self.risk_engine.register_exit(symbol, exit_price, realized_pnl)
+
+                opened_at = pos['opened_at'] if isinstance(pos['opened_at'], datetime) else datetime.fromisoformat(pos['opened_at'])
+                duration_mins = max(1, int((now - opened_at).total_seconds() / 60))
+
+                closed_trade = TradeRecord(
+                    trade_id=pos.get('trade_id', f"AEGIS-{symbol}-{int(now.timestamp())}"),
+                    exchange="PAPER",
+                    symbol=symbol,
+                    market_type="Futures",
+                    close_time=now,
+                    position="Long" if action == 'BUY' else "Short",
+                    net_pnl=realized_pnl,
+                    total_fees=fees,
+                    r_factor=pos.get('r_factor', self.risk_engine.TARGET_RR_RATIO),
+                    risk_pct=0.01,
+                    confidence=pos.get('confidence'),
+                    timeframe=["1h", "15m"],
+                    is_open=False,
+                    duration=f"{duration_mins}m",
+                    pre_notes="Aegis Alpha MTF Alignment Confirmed.",
+                    post_notes=f"Paper exit triggered: {exit_reason} @ ${exit_price:.2f}"
+                )
+                executed_trades.append(closed_trade)
+
+                if self.notion:
+                    try:
+                        self.notion.publish([closed_trade])
+                    except Exception as e:
+                        logging.error(f"Failed to publish closed trade to Notion: {e}")
+
+        # 2. New Signal Evaluation & Authorized Paper Entry
+        signals = self.strategy.generate_signals(snapshots)
 
         for sig in signals:
             symbol = sig.symbol
+            if symbol in self.risk_engine.open_positions:
+                continue
+
             price = float(next((s.current_price for s in snapshots if s.symbol == symbol), Decimal('0')))
             sl_price = float(sig.suggested_stop_loss)
             action_str = "BUY" if sig.signal_type == SignalType.BUY else "SELL"
@@ -80,29 +148,35 @@ class AegisLiveScanner:
                 action=action_str,
                 entry_price=price,
                 defensive_sl=sl_price,
-                signal_id=signal_id
+                signal_id=signal_id,
+                confidence=None  # Honest: strategy does not calculate an honest 1-5 score
             )
 
             if not approved:
                 logging.info(f"Signal for {symbol} rejected by Risk Guardian: {reason}")
                 continue
 
-            logging.info(f"🚀 [GO SIGNAL] Deterministic setup confirmed for {symbol} @ ${price:.2f}")
+            sl_dist = abs(price - sl_price)
+            reward_dist = abs(tp_price - price)
+            r_factor = round(reward_dist / sl_dist, 2) if sl_dist > 0 else self.risk_engine.TARGET_RR_RATIO
 
+            logging.info(f"🚀 [GO SIGNAL] Deterministic setup confirmed for {symbol} @ ${price:.2f} (SL: ${sl_price:.2f}, TP: ${tp_price:.2f}, 1:{r_factor} RR)")
+
+            # Create OPEN paper trade record without immediate fake exit
             trade = TradeRecord(
-                trade_id=str(int(now.timestamp())),
+                trade_id=signal_id,
                 exchange="PAPER",
                 symbol=symbol,
                 market_type="Futures",
                 close_time=now,
                 position="Long" if action_str == "BUY" else "Short",
-                net_pnl=round(qty * (tp_price - price if action_str == "BUY" else price - tp_price), 2),
+                net_pnl=0.0,
                 total_fees=round(price * qty * 0.0004, 2),
-                r_factor=2.0,
+                r_factor=r_factor,
                 risk_pct=0.01,
-                confidence=5,
+                confidence=None,
                 timeframe=["1h", "15m"],
-                is_open=False,
+                is_open=True,
                 pre_notes="Aegis Alpha MTF Alignment Confirmed."
             )
             executed_trades.append(trade)
@@ -111,7 +185,7 @@ class AegisLiveScanner:
                 try:
                     self.notion.publish([trade])
                 except Exception as e:
-                    logging.error(f"Failed to publish trade to Notion: {e}")
+                    logging.error(f"Failed to publish open trade to Notion: {e}")
 
         return executed_trades
 

@@ -140,3 +140,70 @@ def test_notion_upsert_behavior(sample_trade):
     
     assert mock_client.pages.update.called
     assert not mock_client.pages.create.called
+
+def test_notion_open_to_closed_transition_updates_existing_row():
+    pub = NotionPublisher(token="DUMMY_TOKEN", database_id="dummy_db")
+    mock_client = MagicMock()
+    now = datetime(2026, 9, 11, 12, 0, 0, tzinfo=timezone.utc)
+
+    # 1. Open trade
+    open_trade = TradeRecord(
+        trade_id="TR-200",
+        exchange="PAPER",
+        symbol="ETH-USDT",
+        market_type="Futures",
+        close_time=now,
+        position="Long",
+        net_pnl=0.0,
+        total_fees=1.5,
+        is_open=True,
+        r_factor=2.5,
+        confidence=None
+    )
+    assert open_trade.notion_id == "PAPER-ETH-USDT-OPEN-TR-200"
+
+    # Database initially empty: creates page
+    mock_client.databases.query.return_value = {"results": []}
+    mock_client.pages.create.return_value = {"id": "page_row_200"}
+    pub.client = mock_client
+    pub.publish([open_trade])
+
+    assert mock_client.pages.create.called
+    create_call_args = mock_client.pages.create.call_args[1]["properties"]
+    assert create_call_args["#"]["title"][0]["text"]["content"] == "PAPER-ETH-USDT-OPEN-TR-200"
+    # Net PnL and Win/Loss omitted while trade is open
+    assert "Net PnL $" not in create_call_args
+    assert "Win" not in create_call_args
+
+    # 2. Closed trade for same trade_id
+    closed_trade = TradeRecord(
+        trade_id="TR-200",
+        exchange="PAPER",
+        symbol="ETH-USDT",
+        market_type="Futures",
+        close_time=now,
+        position="Long",
+        net_pnl=125.50,
+        total_fees=3.0,
+        is_open=False,
+        r_factor=2.5,
+        confidence=None
+    )
+    assert closed_trade.notion_id == "PAPER-ETH-USDT-CLOSED-TR-200"
+
+    # Query now returns the existing open page
+    mock_client.databases.query.return_value = {
+        "results": [{"id": "page_row_200", "properties": create_call_args}]
+    }
+    mock_client.pages.update.reset_mock()
+    mock_client.pages.create.reset_mock()
+
+    pub.publish([closed_trade])
+
+    # Verified: updates existing page in-place, does not create duplicate
+    assert mock_client.pages.update.called
+    assert not mock_client.pages.create.called
+    update_call_args = mock_client.pages.update.call_args[1]["properties"]
+    assert update_call_args["#"]["title"][0]["text"]["content"] == "PAPER-ETH-USDT-CLOSED-TR-200"
+    assert update_call_args["Net PnL $"]["number"] == 125.50
+    assert update_call_args["Win"]["checkbox"] is True

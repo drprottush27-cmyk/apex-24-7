@@ -156,7 +156,7 @@ class NotionPublisher:
             return
 
         try:
-            existing_page = self._find_existing_row(title_id)
+            existing_page = self._find_existing_row(title_id, trade_id=trade.trade_id)
             if existing_page:
                 props = self._build_properties(trade, existing_props=existing_page.get("properties", {}), force=force)
                 self._execute_with_retry(
@@ -178,11 +178,18 @@ class NotionPublisher:
             if record_dead_letter:
                 self._save_to_dead_letter(trade)
 
-    def _find_existing_row(self, title_id: str) -> Optional[dict]:
+    def _find_existing_row(self, title_id: str, trade_id: Optional[str] = None) -> Optional[dict]:
+        filter_rule = {
+            "or": [
+                {"property": "#", "title": {"equals": title_id}},
+                {"property": "#", "title": {"ends_with": f"-{trade_id}"}}
+            ]
+        } if trade_id else {"property": "#", "title": {"equals": title_id}}
+
         query = self._execute_with_retry(
             lambda: self.client.databases.query(
                 database_id=self.db_id,
-                filter={"property": "#", "title": {"equals": title_id}}
+                filter=filter_rule
             ),
             op_name="query_database",
             title_id=title_id

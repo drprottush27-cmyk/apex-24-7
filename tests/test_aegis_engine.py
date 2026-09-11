@@ -53,18 +53,45 @@ def test_aegis_live_scanner_deterministic_execution():
     )
     scanner.active_pairs = ["BTC-USDT"]
     
-    # 1st cycle: Deterministic execution occurs
+    # 1st cycle: Deterministic entry execution occurs (creates OPEN paper trade)
     trades = scanner.scan_cycle()
     assert len(trades) == 1
     t = trades[0]
     assert t.symbol == "BTC-USDT"
     assert t.position == "Long"
-    assert t.is_open is False
+    assert t.is_open is True
+    assert t.net_pnl == 0.0
+    assert t.is_win is False
+    assert t.is_loss is False
+    assert t.is_breakeven is False
     assert mock_notion.publish.called
 
-    # 2nd cycle immediately: Risk engine rejects duplicate/already open position
+    # 2nd cycle immediately at same price: position already open, no new entries or exits
     trades_2 = scanner.scan_cycle()
     assert len(trades_2) == 0
+
+    # 3rd cycle: Price reaches TP -> position exits
+    open_pos = risk_engine.open_positions["BTC-USDT"]
+    tp_price = open_pos["tp"]
+    mock_scanner.snapshots["BTC-USDT"] = MarketDataSummary(
+        symbol="BTC-USDT",
+        current_price=Decimal(str(tp_price + 100)),
+        liquidity_usd=Decimal('25000000.0'),
+        volume_24h=Decimal('80000000.0'),
+        regime=MarketRegime.TREND_BULL,
+        timestamp=datetime.now(timezone.utc),
+        is_data_fresh=True,
+        is_data_intact=True,
+        indicators={"EMA_20": 75000.0, "EMA_50": 69000.0, "RSI_14": 65.0}
+    )
+    exit_trades = scanner.scan_cycle()
+    assert len(exit_trades) == 1
+    closed_t = exit_trades[0]
+    assert closed_t.symbol == "BTC-USDT"
+    assert closed_t.is_open is False
+    assert closed_t.net_pnl > 0.0
+    assert closed_t.is_win is True
+    assert "BTC-USDT" not in risk_engine.open_positions
 
 def test_aegis_live_scanner_stale_corrupt_data_filtered():
     now = datetime.now(timezone.utc)

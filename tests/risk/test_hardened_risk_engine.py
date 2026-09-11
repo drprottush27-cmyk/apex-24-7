@@ -165,3 +165,63 @@ def test_malformed_signals(temp_state_file):
     ok, _, reason = engine.validate_and_size("BTC-USDT", "BUY", float("inf"), 49000.0)
     assert ok is False
     assert "MALFORMED_SIGNAL" in reason
+
+def test_risk_reward_ratio_validation(temp_state_file):
+    engine = HardenedRiskEngine(simulated_balance=10000.0, state_file=temp_state_file)
+
+    # 1. Long 1:2 rejected (entry=50000, sl=49000 -> risk=1000, tp=52000 -> reward=2000, rr=2.0 < 2.5)
+    ok, qty, reason = engine.validate_and_size("BTC-USDT", "BUY", 50000.0, 49000.0, tp_price=52000.0)
+    assert ok is False
+    assert "below required minimum" in reason
+
+    # 2. Long 1:2.5 accepted (entry=50000, sl=49000 -> risk=1000, tp=52500 -> reward=2500, rr=2.5 >= 2.5)
+    ok, qty, reason = engine.validate_and_size("BTC-USDT", "BUY", 50000.0, 49000.0, tp_price=52500.0)
+    assert ok is True
+    assert qty == 0.1
+    assert reason == "Approved"
+
+    # 3. Short-side 1:2 rejected (entry=50000, sl=51000 -> risk=1000, tp=48000 -> reward=2000, rr=2.0 < 2.5)
+    ok_short_2, _, reason_short_2 = engine.validate_and_size("ETH-USDT", "SELL", 50000.0, 51000.0, tp_price=48000.0)
+    assert ok_short_2 is False
+    assert "below required minimum" in reason_short_2
+
+    # 4. Short-side 1:2.5 accepted (entry=50000, sl=51000 -> risk=1000, tp=47500 -> reward=2500, rr=2.5 >= 2.5)
+    ok_short_25, qty_short, reason_short_25 = engine.validate_and_size("ETH-USDT", "SELL", 50000.0, 51000.0, tp_price=47500.0)
+    assert ok_short_25 is True
+    assert qty_short == 0.1
+    assert reason_short_25 == "Approved"
+
+    # 5. Malformed TP/SL checks
+    # Non-numeric / NaN / Inf TP
+    ok_nan, _, reason_nan = engine.validate_and_size("BTC-USDT", "BUY", 50000.0, 49000.0, tp_price=float("nan"))
+    assert ok_nan is False
+    assert "MALFORMED_SIGNAL" in reason_nan
+
+    ok_inf, _, reason_inf = engine.validate_and_size("BTC-USDT", "BUY", 50000.0, 49000.0, tp_price=float("inf"))
+    assert ok_inf is False
+    assert "MALFORMED_SIGNAL" in reason_inf
+
+    # Negative / Zero TP
+    ok_neg, _, reason_neg = engine.validate_and_size("BTC-USDT", "BUY", 50000.0, 49000.0, tp_price=-1000.0)
+    assert ok_neg is False
+    assert "MALFORMED_SIGNAL" in reason_neg
+
+    # Wrong direction TP
+    # Long with TP below entry
+    ok_wrong_l, _, reason_wrong_l = engine.validate_and_size("BTC-USDT", "BUY", 50000.0, 49000.0, tp_price=49500.0)
+    assert ok_wrong_l is False
+    assert "above entry price for Long" in reason_wrong_l
+
+    # Short with TP above entry
+    ok_wrong_s, _, reason_wrong_s = engine.validate_and_size("BTC-USDT", "SELL", 50000.0, 51000.0, tp_price=50500.0)
+    assert ok_wrong_s is False
+    assert "below entry price for Short" in reason_wrong_s
+
+    # 6. Default TP generation achieves 1:2.5 minimum
+    app_long, _, _, def_tp_long = engine.authorize_and_enter("SOL-USDT", "BUY", 100.0, 98.0)
+    assert app_long is True
+    assert def_tp_long == 105.0  # 100 + (2 * 2.5) = 105.0
+
+    app_short, _, _, def_tp_short = engine.authorize_and_enter("AVAX-USDT", "SELL", 100.0, 102.0)
+    assert app_short is True
+    assert def_tp_short == 95.0  # 100 - (2 * 2.5) = 95.0

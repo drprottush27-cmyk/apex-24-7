@@ -32,6 +32,8 @@ class HardenedRiskEngine:
         self.MAX_TOTAL_LEVERAGE = 3.0       # Max total notional / balance
         self.MIN_SL_PCT = 0.004             # 0.4% minimum SL distance (anti-scalp)
         self.MAX_SL_PCT = 0.050             # 5.0% maximum SL distance
+        self.MIN_RR_RATIO = 2.5             # 1:2.5 minimum Risk-to-Reward ratio
+        self.TARGET_RR_RATIO = 2.5          # Default target R:R ratio
         self.COOLDOWN_MINUTES = 45          # Cooldown per symbol after exit
         
         # Active State
@@ -140,9 +142,18 @@ class HardenedRiskEngine:
                 return True
         return self.circuit_breaker_tripped
 
-    def validate_and_size(self, symbol: str, action: str, entry_price: float, defensive_sl: float, signal_id: Optional[str] = None) -> Tuple[bool, float, str]:
+    def validate_and_size(
+        self,
+        symbol: str,
+        action: str,
+        entry_price: float,
+        defensive_sl: float,
+        signal_id: Optional[str] = None,
+        tp_price: Optional[float] = None
+    ) -> Tuple[bool, float, str]:
         """
         Validates all risk constraints before authorizing execution.
+        Enforces minimum 1:2.5 Risk-to-Reward ratio when target price is specified.
         Returns: (approved: bool, size: float, reason: str)
         """
         with self._lock:
@@ -202,6 +213,26 @@ class HardenedRiskEngine:
             if round(sl_pct, 6) > self.MAX_SL_PCT:
                 return False, 0.0, f"SL distance {sl_pct*100:.2f}% too wide (>{self.MAX_SL_PCT*100}%)."
 
+            # 5b. Take-Profit and Risk:Reward (R:R) Validation
+            if tp_price is not None:
+                try:
+                    tp_price = float(tp_price)
+                except (ValueError, TypeError):
+                    return False, 0.0, "MALFORMED_SIGNAL: Take-profit price must be a valid numeric value."
+
+                if math.isnan(tp_price) or math.isinf(tp_price) or tp_price <= 0:
+                    return False, 0.0, "MALFORMED_SIGNAL: Take-profit price must be a positive finite non-zero value."
+
+                if is_long and tp_price <= entry_price:
+                    return False, 0.0, "Take-profit price must be above entry price for Long."
+                if not is_long and tp_price >= entry_price:
+                    return False, 0.0, "Take-profit price must be below entry price for Short."
+
+                reward_distance = abs(tp_price - entry_price)
+                rr_ratio = reward_distance / sl_distance
+                if round(rr_ratio, 4) < self.MIN_RR_RATIO:
+                    return False, 0.0, f"R:R ratio {rr_ratio:.2f} is below required minimum 1:{self.MIN_RR_RATIO}."
+
             # 6. Sizing Math
             risk_capital = self.balance * self.RISK_PER_TRADE
             raw_quantity = risk_capital / sl_distance
@@ -218,41 +249,79 @@ class HardenedRiskEngine:
 
             return True, round(raw_quantity, 4), "Approved"
 
-    def authorize_and_enter(self, symbol: str, action: str, entry_price: float, defensive_sl: float, signal_id: Optional[str] = None) -> Tuple[bool, float, str, float]:
+    def authorize_and_enter(
+        self,
+        symbol: str,
+        action: str,
+        entry_price: float,
+        defensive_sl: float,
+        signal_id: Optional[str] = None,
+        tp_price: Optional[float] = None,
+        confidence: Optional[int] = None,
+        metadata: Optional[dict] = None
+    ) -> Tuple[bool, float, str, float]:
         """Atomically validates risk constraints and registers entry under the lock."""
         with self._lock:
-            approved, qty, reason = self.validate_and_size(symbol, action, entry_price, defensive_sl, signal_id)
+            approved, qty, reason = self.validate_and_size(
+                symbol, action, entry_price, defensive_sl, signal_id, tp_price=tp_price
+            )
             if not approved:
                 return False, 0.0, reason, 0.0
             is_long = action.upper() == 'BUY'
             sl_dist = abs(entry_price - defensive_sl)
-            tp = round(entry_price + (sl_dist * 2) if is_long else entry_price - (sl_dist * 2), 4)
-            self.register_entry(symbol, action, qty, entry_price, defensive_sl, tp)
-            return True, qty, "Approved", tp
+            final_tp = tp_price if tp_price is not None else round(
+                entry_price + (sl_dist * self.TARGET_RR_RATIO) if is_long else entry_price - (sl_dist * self.TARGET_RR_RATIO),
+                4
+            )
+            self.register_entry(
+                symbol, action, qty, entry_price, defensive_sl, final_tp,
+                signal_id=signal_id, confidence=confidence, metadata=metadata
+            )
+            return True, qty, "Approved", final_tp
 
-    def register_entry(self, symbol: str, action: str, qty: float, entry_price: float, sl: float, tp: float):
+    def register_entry(
+        self,
+        symbol: str,
+        action: str,
+        qty: float,
+        entry_price: float,
+        sl: float,
+        tp: float,
+        signal_id: Optional[str] = None,
+        confidence: Optional[int] = None,
+        metadata: Optional[dict] = None
+    ):
         with self._lock:
+            sl_dist = abs(entry_price - sl)
+            reward_dist = abs(tp - entry_price)
+            rr = round(reward_dist / sl_dist, 2) if sl_dist > 0 else self.TARGET_RR_RATIO
+            now = datetime.now(timezone.utc)
+            trade_id = signal_id or f"AEGIS-{symbol}-{int(now.timestamp())}"
             self.open_positions[symbol] = {
                 'action': action,
                 'qty': qty,
                 'entry_price': entry_price,
                 'sl': sl,
                 'tp': tp,
+                'r_factor': rr,
+                'confidence': confidence,
+                'trade_id': trade_id,
+                'metadata': metadata or {},
                 'notional': qty * entry_price,
-                'opened_at': datetime.now(timezone.utc)
+                'opened_at': now
             }
             self._persist_state()
-            logging.info(f"✅ [ENTRY RECORDED] {action} {qty} {symbol} @ ${entry_price:.2f} | Notional: ${qty*entry_price:.2f}")
+            logging.info(f"✅ [ENTRY RECORDED] {action} {qty} {symbol} @ ${entry_price:.2f} | SL: ${sl:.2f} | TP: ${tp:.2f} (1:{rr} RR)")
 
-    def register_exit(self, symbol: str, exit_price: float, realized_pnl: float):
+    def register_exit(self, symbol: str, exit_price: float, realized_pnl: float) -> Optional[dict]:
         with self._lock:
-            if symbol in self.open_positions:
-                del self.open_positions[symbol]
+            pos = self.open_positions.pop(symbol, None)
             self.balance += realized_pnl
             self.cooldown_tracker[symbol] = datetime.now(timezone.utc) + timedelta(minutes=self.COOLDOWN_MINUTES)
             self._check_circuit_breaker()
             self._persist_state()
             logging.info(f"🏁 [EXIT RECORDED] {symbol} @ ${exit_price:.2f} | PnL: ${realized_pnl:+.2f} | New Balance: ${self.balance:.2f}")
+            return pos
 
 
 class ExecutionModule:
@@ -265,8 +334,19 @@ class ExecutionModule:
         approved, qty, _ = self.risk.validate_and_size(symbol, 'BUY', entry_price, defensive_sl)
         return qty if approved else 0.0
 
-    def process_signal(self, symbol: str, action: str, entry_price: float, defensive_sl: float, signal_id: Optional[str] = None) -> dict:
-        approved, qty, reason, tp = self.risk.authorize_and_enter(symbol, action, entry_price, defensive_sl, signal_id)
+    def process_signal(
+        self,
+        symbol: str,
+        action: str,
+        entry_price: float,
+        defensive_sl: float,
+        signal_id: Optional[str] = None,
+        tp_price: Optional[float] = None,
+        confidence: Optional[int] = None
+    ) -> dict:
+        approved, qty, reason, tp = self.risk.authorize_and_enter(
+            symbol, action, entry_price, defensive_sl, signal_id, tp_price=tp_price, confidence=confidence
+        )
         if not approved:
             logging.warning(f"⛔ [RISK REJECTION] {symbol} {action} denied: {reason}")
             return {
@@ -280,12 +360,14 @@ class ExecutionModule:
                 "take_profit": 0.0
             }
 
+        sl_dist = abs(entry_price - defensive_sl)
+        rr = round(abs(tp - entry_price) / sl_dist, 2) if sl_dist > 0 else self.risk.TARGET_RR_RATIO
 
         print("\n" + "="*55)
         print(f" 🛡️  [HARDENED EXECUTION APPROVED] {action} {symbol}")
         print("="*55)
         print(f" Authorized Qty   : {qty} units")
-        print(f" Entry / SL / TP  : ${entry_price:.4f} / ${defensive_sl:.4f} / ${tp:.4f} (1:2 RR)")
+        print(f" Entry / SL / TP  : ${entry_price:.4f} / ${defensive_sl:.4f} / ${tp:.4f} (1:{rr} RR)")
         print(f" Portfolio Risk   : 1.00% (${self.risk.balance * 0.01:.2f})")
         print("="*55 + "\n")
         
@@ -300,7 +382,6 @@ class ExecutionModule:
             "take_profit": tp
         }
 
-
     def close_position(self, symbol: str, exit_price: float) -> Tuple[bool, float, str]:
         if symbol not in self.risk.open_positions:
             return False, 0.0, f"No open position found for {symbol}"
@@ -310,6 +391,7 @@ class ExecutionModule:
         entry_price = pos['entry_price']
         
         pnl = (exit_price - entry_price) * qty if action == 'BUY' else (entry_price - exit_price) * qty
-        self.risk.register_exit(symbol, exit_price, pnl)
+        closed_pos = self.risk.register_exit(symbol, exit_price, pnl)
+        self.last_closed_position = closed_pos
         return True, round(pnl, 2), "Position closed"
 

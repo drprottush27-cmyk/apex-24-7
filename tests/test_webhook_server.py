@@ -76,7 +76,7 @@ def test_webhook_successful_execution(client):
         assert data["status"] == "executed"
         assert data["symbol"] == "BTC-USDT"
         assert data["authorized_qty"] > 0
-        assert data["take_profit"] == 52000.0
+        assert data["take_profit"] == 52500.0
 
 def test_webhook_replay_duplicate_protection(client):
     with patch("src.webhook_server.get_secret_passphrase", return_value="TEST_SECRET"):
@@ -142,3 +142,59 @@ def test_webhook_position_close(client):
         data = res.json()
         assert data["status"] == "executed"
         assert data["realized_pnl"] > 0
+
+def test_webhook_health_endpoints(client):
+    for endpoint in ["/api/v1/health", "/health"]:
+        res = client.get(endpoint)
+        assert res.status_code == 200
+        data = res.json()
+        assert data["status"] == "healthy"
+        assert data["service"] == "aegis-webhook"
+        assert data["trading_mode"] == "PAPER"
+        assert data["live_trading_enabled"] is False
+        assert "circuit_breaker_tripped" in data
+        assert "open_positions_count" in data
+        assert "passphrase" not in data
+        assert "secret" not in str(data).lower()
+
+def test_webhook_rr_ratio_rejection_and_acceptance(client):
+    with patch("src.webhook_server.get_secret_passphrase", return_value="TEST_SECRET"):
+        # 1:2 R:R (52000 TP with 49000 SL on 50000 Entry) must be REJECTED (< 1:2.5)
+        res_reject = client.post("/webhook", json={
+            "passphrase": "TEST_SECRET",
+            "symbol": "SOL-USDT",
+            "action": "BUY",
+            "price": 50000.0,
+            "defensive_sl": 49000.0,
+            "take_profit": 52000.0,
+            "signal_id": "TV-SOL-RR2"
+        })
+        assert res_reject.status_code == 200
+        assert res_reject.json()["status"] == "rejected"
+        assert "below required minimum" in res_reject.json()["reason"]
+
+        # 1:2.5 R:R (52500 TP with 49000 SL on 50000 Entry) must be ACCEPTED
+        res_accept = client.post("/webhook", json={
+            "passphrase": "TEST_SECRET",
+            "symbol": "SOL-USDT",
+            "action": "BUY",
+            "price": 50000.0,
+            "defensive_sl": 49000.0,
+            "take_profit": 52500.0,
+            "signal_id": "TV-SOL-RR25"
+        })
+        assert res_accept.status_code == 200
+        assert res_accept.json()["status"] == "executed"
+        assert res_accept.json()["take_profit"] == 52500.0
+
+        # Malformed negative TP must return 422
+        res_bad = client.post("/webhook", json={
+            "passphrase": "TEST_SECRET",
+            "symbol": "SOL-USDT",
+            "action": "BUY",
+            "price": 50000.0,
+            "defensive_sl": 49000.0,
+            "take_profit": -52500.0,
+            "signal_id": "TV-SOL-BAD"
+        })
+        assert res_bad.status_code == 422

@@ -22,6 +22,19 @@ _seen_signal_ids: Set[str] = set()
 def get_secret_passphrase() -> str:
     return os.getenv("WEBHOOK_PASSPHRASE", "")
 
+@app.get("/api/v1/health")
+@app.get("/health")
+async def health_check():
+    """Canonical minimal read-only health and readiness check."""
+    return {
+        "status": "healthy",
+        "service": "aegis-webhook",
+        "trading_mode": "PAPER",
+        "live_trading_enabled": False,
+        "circuit_breaker_tripped": executor.risk.circuit_breaker_tripped,
+        "open_positions_count": len(executor.risk.open_positions)
+    }
+
 class SignalPayload(BaseModel):
     passphrase: str = Field(..., min_length=1)
     symbol: str = Field(..., min_length=2)
@@ -29,6 +42,7 @@ class SignalPayload(BaseModel):
     signal_type: str = Field(default="ALERT")
     price: float = Field(..., gt=0.0)
     defensive_sl: Optional[float] = Field(default=None)
+    take_profit: Optional[float] = Field(default=None)
     signal_id: Optional[str] = Field(default=None)
 
     @field_validator('symbol')
@@ -62,6 +76,15 @@ class SignalPayload(BaseModel):
             import math
             if math.isnan(v) or math.isinf(v) or v <= 0:
                 raise ValueError("Defensive SL must be a finite positive number")
+        return v
+
+    @field_validator('take_profit')
+    @classmethod
+    def validate_tp(cls, v: Optional[float]) -> Optional[float]:
+        if v is not None:
+            import math
+            if math.isnan(v) or math.isinf(v) or v <= 0:
+                raise ValueError("Take profit must be a finite positive number")
         return v
 
 @app.post("/webhook")
@@ -116,7 +139,8 @@ async def receive_tradingview_alert(payload: SignalPayload):
         action=payload.action,
         entry_price=payload.price,
         defensive_sl=payload.defensive_sl,
-        signal_id=payload.signal_id
+        signal_id=payload.signal_id,
+        tp_price=payload.take_profit
     )
 
     if not exec_result["approved"]:
