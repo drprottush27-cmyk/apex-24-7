@@ -1,0 +1,186 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    color-scheme: dark;
+  }
+
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+
+  body {
+    margin: 0;
+    @apply bg-bg text-ink font-ui antialiased;
+    overflow: hidden;
+  }
+
+  * {
+    -webkit-tap-highlight-color: transparent;
+    box-sizing: border-box;
+  }
+
+  ::selection {
+    background: rgba(240, 168, 60, 0.3);
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--color-accent-DEFAULT, #f0a83c);
+    outline-offset: 2px;
+  }
+}
+
+@layer components {
+  /* Scrollbars */
+  .scrollbar-thin {
+    scrollbar-width: thin;
+    scrollbar-color: #232a35 transparent;
+  }
+  .scrollbar-thin::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  .scrollbar-thin::-webkit-scrollbar-thumb {
+    background: #232a35;
+    border-radius: 3px;
+  }
+  .scrollbar-thin::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  /* Surfaces */
+  .card {
+    @apply bg-surface border border-border rounded-lg;
+  }
+  .card-pad {
+    @apply p-4;
+  }
+  .inset-block {
+    @apply bg-surface-2 border border-border-subtle rounded-md;
+  }
+
+  /* Type */
+  .section-label {
+    @apply font-mono text-[10px] font-bold uppercase tracking-[0.1em] text-ink-muted;
+  }
+  .section-header {
+    @apply flex items-center justify-between gap-3 mt-4 mb-2 px-0.5;
+  }
+  .section-header:first-child {
+    margin-top: 0;
+  }
+
+  /* Pills / badges */
+  .pill {
+    @apply inline-flex items-center gap-1.5 rounded px-2 py-0.5 font-mono text-[10px] font-bold tracking-wide whitespace-nowrap;
+  }
+  .pill-green {
+    @apply pill bg-emerald-500/10 text-profit border border-profit/30;
+  }
+  .pill-red {
+    @apply pill bg-rose-500/10 text-loss border border-loss/40;
+  }
+  .pill-amber {
+    @apply pill bg-amber-500/10 text-warning border border-warning/35;
+  }
+  .pill-blue {
+    @apply pill bg-blue-500/10 text-info border border-info/35;
+  }
+  .pill-neutral {
+    @apply pill bg-surface-2 text-ink-dim border border-border;
+  }
+  .pill-dim {
+    @apply pill bg-transparent text-ink-muted border border-border-subtle;
+  }
+
+  /* Direction badges */
+  .dir-badge {
+    @apply inline-flex items-center rounded px-1.5 py-0.5 font-mono text-[9px] font-bold tracking-wide;
+  }
+  .dir-long {
+    @apply dir-badge bg-profit/10 text-profit border border-profit/30;
+  }
+  .dir-short {
+    @apply dir-badge bg-loss/10 text-loss border border-loss/30;
+  }
+  .dir-watch {
+    @apply dir-badge bg-warning/10 text-warning border border-warning/30;
+  }
+
+  /* Status dot */
+  .status-dot {
+    @apply inline-block h-1.5 w-1.5 rounded-full;
+  }
+  .status-dot-green {
+    @apply status-dot bg-profit;
+  }
+  .status-dot-red {
+    @apply status-dot bg-loss;
+  }
+  .status-dot-amber {
+    @apply status-dot bg-warning;
+  }
+  .status-dot-blue {
+    @apply status-dot bg-info;
+  }
+  .status-dot-dim {
+    @apply status-dot bg-ink-muted;
+  }
+
+  /* Paper mode badge */
+  .paper-badge {
+    @apply inline-flex items-center gap-1.5 rounded px-2.5 py-1 font-mono text-[10px] font-bold tracking-[0.05em] border border-accent-dim bg-accent/10 text-accent;
+  }
+
+  /* Dev mock ribbon */
+  .dev-mock-ribbon {
+    @apply inline-flex items-center gap-1.5 rounded px-2.5 py-1 font-mono text-[10px] font-bold tracking-[0.05em] border border-info/40 bg-info/10 text-info;
+  }
+
+  /* Data table */
+  .data-table {
+    @apply w-full border-collapse font-mono text-[11px];
+  }
+  .data-table thead th {
+    @apply px-3 py-2 text-left font-bold uppercase tracking-[0.06em] text-ink-muted text-[9px] border-b border-border;
+  }
+  .data-table tbody td {
+    @apply px-3 py-2.5 border-b border-border-subtle text-ink-dim;
+  }
+  .data-table tbody tr {
+    @apply transition-colors;
+  }
+  .data-table tbody tr:hover {
+    @apply bg-surface-2;
+  }
+  .data-table tbody tr:last-child td {
+    border-bottom: none;
+  }
+
+  /* Emergency (disabled) control */
+  .emergency-control {
+    @apply inline-flex items-center justify-center gap-2 rounded-md border border-loss/50 bg-loss/10 px-4 py-2.5 font-mono text-[11px] font-bold tracking-wide text-loss opacity-80 cursor-not-allowed;
+  }
+
+  /* Touch-friendly link/button base */
+  .btn-ghost {
+    @apply inline-flex items-center gap-1.5 rounded-md border border-border bg-surface-2 px-3 py-1.5 font-mono text-[10px] font-semibold text-ink-dim transition-colors hover:border-border-focus hover:text-ink;
+  }
+
+  .stat-label {
+    @apply block font-mono text-[9px] uppercase tracking-[0.06em] text-ink-muted;
+  }
+  .stat-value {
+    @apply block font-mono text-[15px] font-semibold text-ink;
+  }
+}
+
+@layer utilities {
+  .safe-bottom {
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+}
