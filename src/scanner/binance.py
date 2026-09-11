@@ -60,8 +60,10 @@ class BinanceTestnetScanner:
                 datetime.now(timezone.utc), True, True, indicators
             )
         except Exception as e:
-            print(f"[!] SCANNER ERROR: {str(e)}")
+            import logging
+            logging.error(f"[!] SCANNER ERROR on {symbol}: {e}")
             return MarketDataSummary(
                 symbol, Decimal('0'), Decimal('0'), Decimal('0'),
-                MarketRegime.RANGING, datetime.now(timezone.utc), False, False
+                MarketRegime.UNKNOWN, datetime.now(timezone.utc), False, False
             )
+
