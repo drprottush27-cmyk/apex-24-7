@@ -25,3 +25,6 @@ build/
 *.key
 credentials.json
 secrets.json
+logs/
+data/
+
