@@ -20,6 +20,7 @@ class PaperPosition:
     entry_price: Decimal
     stop_loss: Optional[Decimal]
     opened_at_utc: datetime
+    side: str = "LONG"
 
 @dataclass(frozen=True)
 class PaperTradeEvent:
@@ -31,3 +32,5 @@ class PaperTradeEvent:
     price: Decimal
     fee: Decimal
     realized_pnl: Decimal
+    notes: str = ""
+
