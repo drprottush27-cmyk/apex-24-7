@@ -161,12 +161,29 @@ class BinanceProvider(MarketDataProvider):
         data = self._get(f"/fapi/v1/ticker/24hr?symbol={symbol}")
         if not isinstance(data, dict):
             raise ProviderError(self.name, "ticker response is not a dict")
+        
+        bid_val = data.get("bidPrice")
+        ask_val = data.get("askPrice")
+        if bid_val is None or ask_val is None:
+            try:
+                book = self._get(f"/fapi/v1/ticker/bookTicker?symbol={symbol}")
+                if isinstance(book, dict):
+                    bid_val = bid_val if bid_val is not None else book.get("bidPrice")
+                    ask_val = ask_val if ask_val is not None else book.get("askPrice")
+            except Exception:
+                pass
+
+        if bid_val is None:
+            _require_key(data, "bidPrice", self.name)
+        if ask_val is None:
+            _require_key(data, "askPrice", self.name)
+
         return Ticker(
             symbol=symbol,
             provider=self.name,
             last_price=_safe_decimal(_require_key(data, "lastPrice", self.name), "lastPrice", self.name),
-            bid=_safe_decimal(_require_key(data, "bidPrice", self.name), "bidPrice", self.name),
-            ask=_safe_decimal(_require_key(data, "askPrice", self.name), "askPrice", self.name),
+            bid=_safe_decimal(bid_val, "bidPrice", self.name),
+            ask=_safe_decimal(ask_val, "askPrice", self.name),
             high_24h=_safe_decimal(_require_key(data, "highPrice", self.name), "highPrice", self.name),
             low_24h=_safe_decimal(_require_key(data, "lowPrice", self.name), "lowPrice", self.name),
             volume_24h=_safe_decimal(_require_key(data, "volume", self.name), "volume", self.name),
