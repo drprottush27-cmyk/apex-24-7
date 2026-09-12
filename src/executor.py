@@ -6,7 +6,7 @@ import tempfile
 import threading
 from datetime import datetime, timezone, timedelta, date
 from pathlib import Path
-from typing import Dict, Optional, Tuple
+from typing import Dict, List, Optional, Tuple
 from dotenv import load_dotenv
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s [%(levelname)s] %(message)s')
@@ -35,6 +35,7 @@ class HardenedRiskEngine:
         self.MIN_RR_RATIO = 2.5             # 1:2.5 minimum Risk-to-Reward ratio
         self.TARGET_RR_RATIO = 2.5          # Default target R:R ratio
         self.COOLDOWN_MINUTES = 45          # Cooldown per symbol after exit
+        self.MAX_CLOSED_TRADES = 500
         
         # Active State
         self.balance: float = simulated_balance
@@ -44,6 +45,7 @@ class HardenedRiskEngine:
         self.cooldown_tracker: Dict[str, datetime] = {}
         self.circuit_breaker_tripped: bool = False
         self.processed_signal_ids: set = set()
+        self.closed_trades: List[dict] = []
 
         if self.state_file:
             self._load_state()
@@ -63,7 +65,8 @@ class HardenedRiskEngine:
                     self.last_day_reset = date.fromisoformat(reset_str)
                 self.circuit_breaker_tripped = bool(data.get("circuit_breaker_tripped", False))
                 self.processed_signal_ids = set(data.get("processed_signal_ids", []))
-                
+                self.closed_trades = list(data.get("closed_trades", []))[-self.MAX_CLOSED_TRADES:]
+
                 # Rehydrate open positions
                 positions = {}
                 for sym, p in data.get("open_positions", {}).items():
@@ -109,6 +112,7 @@ class HardenedRiskEngine:
                     "last_day_reset": self.last_day_reset.isoformat(),
                     "circuit_breaker_tripped": self.circuit_breaker_tripped,
                     "processed_signal_ids": list(self.processed_signal_ids),
+                    "closed_trades": self.closed_trades,
                     "open_positions": pos_serialized,
                     "cooldown_tracker": cd_serialized,
                     "updated_at": datetime.now(timezone.utc).isoformat()
@@ -313,11 +317,39 @@ class HardenedRiskEngine:
             self._persist_state()
             logging.info(f"✅ [ENTRY RECORDED] {action} {qty} {symbol} @ ${entry_price:.2f} | SL: ${sl:.2f} | TP: ${tp:.2f} (1:{rr} RR)")
 
-    def register_exit(self, symbol: str, exit_price: float, realized_pnl: float) -> Optional[dict]:
+    @staticmethod
+    def _iso(value) -> Optional[str]:
+        if value is None:
+            return None
+        if isinstance(value, datetime):
+            return value.isoformat()
+        return str(value)
+
+    def register_exit(self, symbol: str, exit_price: float, realized_pnl: float, exit_reason: Optional[str] = None) -> Optional[dict]:
         with self._lock:
             pos = self.open_positions.pop(symbol, None)
             self.balance += realized_pnl
             self.cooldown_tracker[symbol] = datetime.now(timezone.utc) + timedelta(minutes=self.COOLDOWN_MINUTES)
+            if pos is not None:
+                closed_at = datetime.now(timezone.utc)
+                self.closed_trades.append({
+                    "trade_id": pos.get("trade_id"),
+                    "symbol": symbol,
+                    "action": pos.get("action"),
+                    "qty": pos.get("qty"),
+                    "entry_price": pos.get("entry_price"),
+                    "exit_price": exit_price,
+                    "sl": pos.get("sl"),
+                    "tp": pos.get("tp"),
+                    "r_factor": pos.get("r_factor"),
+                    "confidence": pos.get("confidence"),
+                    "realized_pnl": realized_pnl,
+                    "opened_at": self._iso(pos.get("opened_at")),
+                    "closed_at": closed_at.isoformat(),
+                    "exit_reason": exit_reason,
+                })
+                if len(self.closed_trades) > self.MAX_CLOSED_TRADES:
+                    self.closed_trades = self.closed_trades[-self.MAX_CLOSED_TRADES:]
             self._check_circuit_breaker()
             self._persist_state()
             logging.info(f"🏁 [EXIT RECORDED] {symbol} @ ${exit_price:.2f} | PnL: ${realized_pnl:+.2f} | New Balance: ${self.balance:.2f}")

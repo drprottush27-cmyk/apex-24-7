@@ -7,6 +7,14 @@ from pydantic import BaseModel, Field, field_validator
 from dotenv import load_dotenv
 
 from src.executor import ExecutionModule
+from src.api_v1 import register_v1_observability
+from src.apex.advisory.ollama import OllamaAdvisor
+from src.apex.agents.binance import BinanceMarketAgent
+from src.apex.agents.bybit import BybitMarketAgent
+from src.apex.agents.okx import OKXMarketAgent
+from src.apex.integration.pipeline import ApexIntelligencePipeline
+from src.apex.intelligence.engine import CrossExchangeIntelligence
+from src.apex.orchestration.engine import PaperAccountOrchestrator
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s [%(levelname)s] %(message)s')
 load_dotenv('/srv/apex/.env')
@@ -15,6 +23,23 @@ app = FastAPI(title="Aegis Alpha Paper Webhook Server", version="1.0.0")
 
 # PAPER EXECUTION BOUNDARY: Exchange order placement remains strictly disabled
 executor = ExecutionModule(exchange_id='mock', paper_trade=True)
+
+# PAPER-ONLY advisory integration: read-only market agents, cross-exchange
+# confirmation, a local advisory model and paper multi-account orchestration.
+# None of these components can place, cancel or execute orders.
+_pipeline = ApexIntelligencePipeline(
+    agents={
+        "binance": BinanceMarketAgent(),
+        "okx": OKXMarketAgent(),
+        "bybit": BybitMarketAgent(),
+    },
+    intelligence=CrossExchangeIntelligence(),
+    advisor=OllamaAdvisor(),
+    orchestrator=PaperAccountOrchestrator(guardian=executor.risk),
+)
+
+# Phase 1 read-only observability API (GET only, mounted without duplicating health)
+register_v1_observability(app, executor, pipeline=_pipeline)
 
 # Replay / Duplicate Signal Tracker
 _seen_signal_ids: Set[str] = set()
