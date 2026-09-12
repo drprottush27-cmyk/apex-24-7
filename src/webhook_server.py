@@ -1,3 +1,5 @@
+from contextlib import asynccontextmanager
+import asyncio
 import os
 import logging
 import secrets
@@ -19,7 +21,35 @@ from src.apex.orchestration.engine import PaperAccountOrchestrator
 logging.basicConfig(level=logging.INFO, format='%(asctime)s [%(levelname)s] %(message)s')
 load_dotenv('/srv/apex/.env')
 
-app = FastAPI(title="Aegis Alpha Paper Webhook Server", version="1.0.0")
+
+_WATCHLIST = ['BTCUSDT', 'ETHUSDT', 'SOLUSDT']
+
+async def _pipeline_background_scanner(interval_seconds: int = 15):
+    logging.info('Starting continuous background market scanner for %s', _WATCHLIST)
+    while True:
+        for symbol in _WATCHLIST:
+            try:
+                await _pipeline.run_cycle(symbol)
+            except asyncio.CancelledError:
+                return
+            except Exception as e:
+                logging.error('Error scanning %s: %s', symbol, e)
+        try:
+            await asyncio.sleep(interval_seconds)
+        except asyncio.CancelledError:
+            return
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    task = asyncio.create_task(_pipeline_background_scanner())
+    yield
+    task.cancel()
+    try:
+        await task
+    except asyncio.CancelledError:
+        pass
+
+app = FastAPI(title="Aegis Alpha Paper Webhook Server", version="1.0.0", lifespan=lifespan)
 
 # PAPER EXECUTION BOUNDARY: Exchange order placement remains strictly disabled
 executor = ExecutionModule(exchange_id='mock', paper_trade=True)
@@ -188,3 +218,21 @@ async def receive_tradingview_alert(payload: SignalPayload):
         "signal_id": payload.signal_id,
         "message": "Paper order approved by Risk Guardian and registered in virtual ledger"
     }
+
+
+from fastapi.staticfiles import StaticFiles
+from starlette.responses import FileResponse
+
+DIST_DIR = '/srv/apex/frontend/dist'
+if os.path.isdir(DIST_DIR):
+    app.mount('/assets', StaticFiles(directory=os.path.join(DIST_DIR, 'assets')), name='assets')
+
+    @app.api_route('/', methods=['GET', 'HEAD'])
+    @app.api_route('/{full_path:path}', methods=['GET', 'HEAD'])
+    async def serve_spa(full_path: str = ''):
+        if full_path and any(full_path.startswith(p) for p in ('api/', 'webhook', 'health', 'docs', 'openapi.json')):
+            raise HTTPException(status_code=404, detail='Endpoint not found')
+        index_file = os.path.join(DIST_DIR, 'index.html')
+        if os.path.exists(index_file):
+            return FileResponse(index_file)
+        raise HTTPException(status_code=404, detail='Frontend dist not built')

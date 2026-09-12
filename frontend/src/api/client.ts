@@ -9,7 +9,7 @@
  */
 
 /** Flip to true only during a future phase that explicitly wires the backend. */
-export const BACKEND_WIRED = false
+export const BACKEND_WIRED = true
 
 const DEFAULT_BASE_URL = '/api/v1'
 

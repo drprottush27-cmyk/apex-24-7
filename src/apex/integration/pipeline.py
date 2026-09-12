@@ -36,11 +36,17 @@ class ApexIntelligencePipeline:
 
     def __init__(
         self,
-        agents: Dict[str, MarketAgent],
+        agents: Optional[Dict[str, MarketAgent]] = None,
         intelligence: Optional[CrossExchangeIntelligence] = None,
         advisor: Optional[OllamaAdvisor] = None,
         orchestrator: Optional[PaperAccountOrchestrator] = None,
     ) -> None:
+        if agents is None:
+            agents = {
+                "binance": BinanceMarketAgent(),
+                "bybit": BybitMarketAgent(),
+                "okx": OKXMarketAgent(),
+            }
         if not agents:
             raise ValueError("at least one market agent is required")
         self.agents = dict(agents)
@@ -99,10 +105,33 @@ class ApexIntelligencePipeline:
         report_dict = self.intelligence.analyze(snapshots).to_dict()
 
         rows = [snap.to_dict() for snap in snapshots.values() if snap.is_available]
-        advisory = self._advisory_report(symbol, report_dict, snapshots)
-        overview = self._orchestrator_overview()
+        # 1. Publish real-time market scanner and cross-exchange analytics immediately
+        obs = self.observability
+        if obs is not None:
+            if rows:
+                obs.publish_scanner(rows)
+            else:
+                obs.clear_scanner()
+            obs.publish_cross_exchange(report_dict)
 
-        bundle = {
+        # 2. Evaluate orchestrator and optional advisory (bounded timeout)
+        overview = self._orchestrator_overview()
+        advisory = None
+        try:
+            advisory = await asyncio.wait_for(
+                asyncio.to_thread(self._advisory_report, symbol, report_dict, snapshots),
+                timeout=4.0
+            )
+        except Exception as e:
+            pass
+
+        if obs is not None:
+            if advisory is not None:
+                obs.publish_intelligence(advisory)
+            if overview is not None:
+                obs.publish_multi_account(overview)
+
+        return {
             "symbol": symbol,
             "scanned_at": datetime.now(timezone.utc).isoformat(),
             "scanner": {
@@ -113,19 +142,6 @@ class ApexIntelligencePipeline:
             "intelligence": advisory,
             "multi_account": {"overview": overview} if overview is not None else None,
         }
-
-        obs = self.observability
-        if obs is not None:
-            if rows:
-                obs.publish_scanner(rows)
-            else:
-                obs.clear_scanner()
-            obs.publish_cross_exchange(report_dict)
-            if advisory is not None:
-                obs.publish_intelligence(advisory)
-            if overview is not None:
-                obs.publish_multi_account(overview)
-        return bundle
 
     def _advisory_report(
         self,

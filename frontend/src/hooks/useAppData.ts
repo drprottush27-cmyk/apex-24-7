@@ -1,3 +1,8 @@
+import { fetchScanner } from '../api/scanner'
+import { fetchPositions } from '../api/positions'
+import { fetchGuardian } from '../api/guardian'
+import { fetchPerformance } from '../api/performance'
+import { fetchHealth } from '../api/health'
 /**
  * Convenience data hooks for each domain. All of them route through the honest
  * `useData` gate: UNAVAILABLE when no backend, clearly mocked when DEV MOCK is
@@ -27,19 +32,19 @@ import type {
 } from '../types'
 
 export function useHealthData(): DataResult<HealthResponse> {
-  return useData<HealthResponse>({ mock: createMockHealth })
+  return useData<HealthResponse>({ mock: createMockHealth, fetcher: fetchHealth })
 }
 
 export function useScannerData(): DataResult<ScannerRow[]> {
-  return useData<ScannerRow[]>({ mock: createMockScanner })
+  return useData<ScannerRow[]>({ mock: createMockScanner, fetcher: async () => (await fetchScanner() as any).rows ?? [] })
 }
 
 export function usePositionsData(): DataResult<PaperPosition[]> {
-  return useData<PaperPosition[]>({ mock: createMockPositions })
+  return useData<PaperPosition[]>({ mock: createMockPositions, fetcher: fetchPositions })
 }
 
 export function useGuardianData(): DataResult<GuardianStatus> {
-  return useData<GuardianStatus>({ mock: createMockGuardian })
+  return useData<GuardianStatus>({ mock: createMockGuardian, fetcher: fetchGuardian })
 }
 
 export function useJournalData(): DataResult<TradeJournalEntry[]> {
@@ -55,5 +60,5 @@ export function useSystemHealthData(): DataResult<SystemHealth> {
 }
 
 export function usePerformanceData(): DataResult<PerformanceSummary> {
-  return useData<PerformanceSummary>({ mock: createMockPerformance })
+  return useData<PerformanceSummary>({ mock: createMockPerformance, fetcher: fetchPerformance })
 }
