@@ -4,6 +4,7 @@ import json
 import os
 import urllib.error
 import urllib.request
+import urllib.error
 from datetime import date, datetime, timezone
 from decimal import Decimal
 from typing import Any, Dict, List, Mapping, Optional
@@ -113,7 +114,10 @@ class OllamaAdvisor:
         )
         try:
             with urllib.request.urlopen(req, timeout=self.timeout_s) as resp:
-                body = resp.read()
+                try:
+                    body = resp.read(2_000_000)
+                except TypeError:
+                    body = resp.read()
             parsed = json.loads(body)
         except Exception as exc:
             return self._failure(f"OLLAMA_UNAVAILABLE: {exc}", generated_at)

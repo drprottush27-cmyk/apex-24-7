@@ -16,21 +16,41 @@ from .models import NormalizedMarketSnapshot
 logger = logging.getLogger(__name__)
 
 
-def http_get_json(url: str, timeout_s: float = 10.0) -> Optional[dict | list]:
+def http_get_json(
+    url: str, timeout_s: float = 10.0, max_bytes: int = 5_000_000
+) -> Optional[dict | list]:
     """Best-effort public GET returning parsed JSON, or None on any failure.
 
-    Used by market agents for optional fields (open interest, symbol metadata).
-    A failure here must never crash the intelligence layer.
+    Hardened boundaries:
+      * Enforces timeout_s strictly.
+      * Enforces max_bytes limit to prevent memory exhaustion.
+      * Handles HTTP 429/5xx, network timeouts, and JSON parse errors gracefully.
     """
-    req = urllib.request.Request(url, headers={"User-Agent": "apex/0.1"})
+    req = urllib.request.Request(
+        url,
+        headers={"User-Agent": "apex/0.1 (paper-market-observer)"}
+    )
     try:
         with urllib.request.urlopen(req, timeout=timeout_s) as resp:
-            body = resp.read()
-            if not body:
+            status = getattr(resp, "status", 200)
+            if status == 429:
+                logger.warning("Upstream rate limited (HTTP 429) for %s", url)
                 return None
-            return json.loads(body)
-    except Exception:
-        # Best-effort boundary: any transport/protocol/parse error -> None.
+            if status >= 400:
+                logger.warning("Upstream error HTTP %d for %s", status, url)
+                return None
+
+            body = resp.read(max_bytes + 1)
+            if not body or len(body) > max_bytes:
+                if len(body) > max_bytes:
+                    logger.warning("Response exceeded max_bytes (%d) for %s", max_bytes, url)
+                return None
+            return json.loads(body.decode("utf-8", errors="replace"))
+    except (urllib.error.HTTPError, urllib.error.URLError, TimeoutError, OSError, json.JSONDecodeError, ValueError) as exc:
+        logger.debug("Safe fetch failure for %s: %s", url, exc)
+        return None
+    except Exception as exc:
+        logger.warning("Unexpected error fetching %s: %s", url, exc)
         return None
 
 

@@ -48,6 +48,7 @@ class ApexIntelligencePipeline:
         self.advisor = advisor
         self.orchestrator = orchestrator
         self.observability = None
+        self._lock = asyncio.Lock()
 
     def bind(self, observability: Any) -> None:
         self.observability = observability
