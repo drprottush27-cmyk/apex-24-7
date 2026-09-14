@@ -28,6 +28,7 @@ import argparse
 import os
 import signal
 import sys
+import threading
 import time
 from pathlib import Path
 
@@ -211,10 +212,25 @@ def main() -> int:
         api_server.start()
         logger.info("apex api server listening", host="127.0.0.1", port=args.api_port)
 
-    stop = {"flag": False}
+    bot_service = None
+    bot_token = os.environ.get("TELEGRAM_BOT_TOKEN", "").strip()
+    if bot_token:
+        from apex.telegram.bot import TelegramBotService
+        miniapp_url = os.environ.get(
+            "TELEGRAM_MINIAPP_URL",
+            "https://eng-industries-sep-joshua.trycloudflare.com/algo",
+        )
+        bot_service = TelegramBotService(
+            bot_token=bot_token,
+            api_base_url=f"http://127.0.0.1:{args.api_port}" if args.api_port > 0 else "http://127.0.0.1:8765",
+            miniapp_url=miniapp_url,
+        )
+        bot_service.start()
+
+    stop_event = threading.Event()
 
     def _handle_signal(signum: int, frame: object) -> None:
-        stop["flag"] = True
+        stop_event.set()
         logger.info("signal received; graceful shutdown", signal=signum)
 
     signal.signal(signal.SIGINT, _handle_signal)
@@ -222,7 +238,7 @@ def main() -> int:
 
     try:
         ticks_run = 0
-        while not stop["flag"] and (args.ticks == 0 or ticks_run < args.ticks):
+        while not stop_event.is_set() and (args.ticks == 0 or ticks_run < args.ticks):
             event = engine.scan_once()
             health = engine.get_health()
             status = engine.get_status()
@@ -241,11 +257,13 @@ def main() -> int:
             )
             ticks_run += 1
             if args.ticks == 0 or ticks_run < args.ticks:
-                time.sleep(args.interval_ms / 1000.0)
+                stop_event.wait(args.interval_ms / 1000.0)
         logger.info("apex service stop requested", ticks_run=ticks_run)
     except KeyboardInterrupt:
         logger.info("interrupted; shutting down gracefully")
     finally:
+        if bot_service is not None:
+            bot_service.stop()
         if api_server is not None:
             api_server.stop()
         engine.shutdown()

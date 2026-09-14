@@ -33,7 +33,8 @@ class GrokIntelligenceClient:
         api_key: Optional[str] = None,
         base_url: Optional[str] = None,
         model: Optional[str] = None,
-        timeout: float = 10.0,
+        timeout: Optional[float] = None,
+        max_tokens: Optional[int] = None,
     ) -> None:
         self.api_key = (
             api_key
@@ -49,7 +50,8 @@ class GrokIntelligenceClient:
             model
             or os.getenv("APEX_XAI_MODEL", "grok-beta")
         )
-        self.timeout = timeout
+        self.timeout = timeout if timeout is not None else float(os.getenv("APEX_XAI_TIMEOUT", "15.0"))
+        self.max_tokens = int(os.getenv("APEX_XAI_MAX_TOKENS", "300"))
 
     @property
     def is_available(self) -> bool:
@@ -136,7 +138,7 @@ class GrokIntelligenceClient:
             "4. Suggested focus areas for human operators"
         )
 
-        raw_output = self._call_chat_completion(sys_prompt, user_prompt)
+        raw_output = self._call_chat_completion(sys_prompt, user_prompt, max_tokens=self.max_tokens)
         if raw_output:
             return {
                 "status": "success",
@@ -177,7 +179,7 @@ class GrokIntelligenceClient:
             "3. Liquidity and orderbook slippage vulnerabilities"
         )
 
-        raw_output = self._call_chat_completion(sys_prompt, user_prompt)
+        raw_output = self._call_chat_completion(sys_prompt, user_prompt, max_tokens=self.max_tokens)
         if raw_output:
             return {
                 "status": "success",
