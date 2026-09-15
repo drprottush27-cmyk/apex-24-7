@@ -39,6 +39,12 @@ from apex.engines.tactical.model import (
     WhaleFlowContext,
     WhaleFlowLabelQuality,
 )
+from apex.engines.tactical.btc_regime import (
+    BtcRegimeResult,
+    BtcRegimeState,
+    evaluate_btc_regime,
+    should_veto_altcoin_signal,
+)
 from apex.engines.tactical.mtf import (
     HtfTrend,
     HtfTrendConfluence,
@@ -48,6 +54,8 @@ from apex.engines.tactical.mtf import (
 from apex.engines.tactical.scorer import TacticalScorer
 
 __all__ = [
+    "BtcRegimeResult",
+    "BtcRegimeState",
     "DepthLevel",
     "DepthSnapshot",
     "FundingPoint",
@@ -71,9 +79,12 @@ __all__ = [
     "compute_features",
     "depth_imbalance",
     "directional_bias",
+    "evaluate_btc_regime",
     "funding_rate",
     "htf_trend_confluence",
     "liquidation_imbalance_pct",
     "oi_expansion_pct",
     "resample_to_higher_timeframe",
+    "should_veto_altcoin_signal",
 ]
+
