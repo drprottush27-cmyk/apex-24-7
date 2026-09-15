@@ -57,3 +57,4 @@ coverage.xml
 *.bak
 *.swp
 *.egg-info/
+stitch-export/

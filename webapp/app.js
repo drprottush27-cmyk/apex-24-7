@@ -777,6 +777,263 @@ setInterval(() => {
 }, 1000);
 
 /* ══════════════════════════════════════════════════════════════════════════ */
+/* REUSABLE LIVE MARKET INTELLIGENCE & CHART WORKSTATION                      */
+/* ══════════════════════════════════════════════════════════════════════════ */
+
+let currentWorkstationSymbol = 'BTCUSDT';
+let currentWorkstationTimeframe = '15m';
+let symbolPlanCache = {};
+let realtimeCache = {};
+let lastIntelUpdateTs = Date.now();
+
+async function renderLiveMarketIntelligence(symbol, containerId) {
+  const container = document.getElementById(containerId);
+  if (!container) return;
+
+  if (!symbolPlanCache[symbol]) {
+    container.innerHTML = `
+      <div class="intel-header">
+        <div class="intel-title-wrap">
+          <span class="pulse-dot cyan"></span>
+          <strong>Live Market Intelligence — ${escapeHtml(symbol)}</strong>
+        </div>
+        <span class="live-badge">LOADING</span>
+      </div>
+      <div style="padding: 14px; text-align: center; color: var(--text-muted); font-family: var(--font-mono, monospace); font-size: 11px;">
+        Synchronizing order flow, market structure & RiskGate telemetry...
+      </div>
+    `;
+  }
+
+  try {
+    const [planRes, rtRes] = await Promise.allSettled([
+      fetch(`/api/v1/plan?symbol=${encodeURIComponent(symbol)}`).then(r => r.ok ? r.json() : null),
+      fetch('/api/v1/realtime').then(r => r.ok ? r.json() : null)
+    ]);
+
+    const plan = planRes.status === 'fulfilled' ? planRes.value : null;
+    const rt = (rtRes.status === 'fulfilled' && rtRes.value) ? rtRes.value : null;
+    const metric = rt?.metrics?.[symbol] || null;
+    const signal = latestData?.signals?.find(s => s.symbol.toUpperCase() === symbol.toUpperCase()) || null;
+    const activePosition = latestData?.positions?.find(p => p.symbol.toUpperCase() === symbol.toUpperCase()) || null;
+
+    symbolPlanCache[symbol] = plan;
+    if (metric) realtimeCache[symbol] = metric;
+    lastIntelUpdateTs = Date.now();
+
+    const unavailable = `<span class="unavailable-pill">DATA UNAVAILABLE</span>`;
+    const formatTime = new Date(lastIntelUpdateTs).toLocaleTimeString();
+
+    container.innerHTML = `
+      <div class="intel-header">
+        <div class="intel-title-wrap">
+          <span class="pulse-dot cyan"></span>
+          <strong style="font-family: var(--font-display, sans-serif); font-size: 13px; text-transform: uppercase; letter-spacing: 0.04em;">Live Market Intelligence // ${escapeHtml(symbol)}</strong>
+          <span class="subtle-pill">${escapeHtml(currentWorkstationTimeframe)} • BINANCE FUTURES</span>
+        </div>
+        <div class="intel-badge-row">
+          <span class="live-badge">LIVE</span>
+          <span style="font-family: var(--font-mono, monospace); font-size: 10px; color: var(--text-muted);">${formatTime}</span>
+        </div>
+      </div>
+
+      <div class="intel-grid">
+        <!-- Quadrant 1: Order Flow & Microstructure -->
+        <div class="intel-quadrant">
+          <div class="quadrant-heading">
+            <span>Order Flow & CVD</span>
+            <span style="font-size: 9px; opacity: 0.6;">L2 Telemetry</span>
+          </div>
+          <div class="intel-row">
+            <span class="intel-label">CVD (Cumulative Vol Delta)</span>
+            <span class="intel-val ${metric && metric.cvd >= 0 ? 'pos' : (metric && metric.cvd < 0 ? 'neg' : '')}">
+              ${metric && metric.cvd != null && metric.cvd !== 0 ? (metric.cvd > 0 ? '+' + metric.cvd.toFixed(2) : metric.cvd.toFixed(2)) : unavailable}
+            </span>
+          </div>
+          <div class="intel-row">
+            <span class="intel-label">Funding Rate (8h)</span>
+            <span class="intel-val pos">
+              ${metric && metric.funding_rate != null ? (metric.funding_rate * 100).toFixed(4) + '%' : (signal?.features?.funding_rate != null ? (signal.features.funding_rate * 100).toFixed(4) + '%' : unavailable)}
+            </span>
+          </div>
+          <div class="intel-row">
+            <span class="intel-label">Liquidations (Session)</span>
+            <span class="intel-val">${metric && metric.liquidations_count != null ? metric.liquidations_count + ' events' : unavailable}</span>
+          </div>
+          <div class="intel-row">
+            <span class="intel-label">Depth Imbalance</span>
+            <span class="intel-val">${signal?.features?.depth_imbalance != null ? (signal.features.depth_imbalance * 100).toFixed(1) + '%' : unavailable}</span>
+          </div>
+          <div class="intel-row">
+            <span class="intel-label">Whale Orders / Large Trades</span>
+            <span class="intel-val">${unavailable}</span>
+          </div>
+        </div>
+
+        <!-- Quadrant 2: Market Structure & Smart Money Concepts -->
+        <div class="intel-quadrant">
+          <div class="quadrant-heading">
+            <span>Structure & Price Action</span>
+            <span style="font-size: 9px; opacity: 0.6;">SMC Matrix</span>
+          </div>
+          <div class="intel-row">
+            <span class="intel-label">BOS / CHoCH State</span>
+            <span class="intel-val pos">${signal?.multi_timeframe?.trend ? signal.multi_timeframe.trend + ' (' + signal.multi_timeframe.htf_timeframe + ')' : unavailable}</span>
+          </div>
+          <div class="intel-row">
+            <span class="intel-label">Liquidity Sweeps (SFP)</span>
+            <span class="intel-val ${signal?.features?.sfp_bullish ? 'pos' : (signal?.features?.sfp_bearish ? 'neg' : '')}">
+              ${signal?.features?.sfp_bullish ? 'BULLISH SFP' : (signal?.features?.sfp_bearish ? 'BEARISH SFP' : 'None Active')}
+            </span>
+          </div>
+          <div class="intel-row">
+            <span class="intel-label">Order Block Entry Zone</span>
+            <span class="intel-val" style="color: #00f2fe;">${plan?.entry_zone ? '$' + plan.entry_zone.low.toFixed(2) + ' - $' + plan.entry_zone.high.toFixed(2) : unavailable}</span>
+          </div>
+          <div class="intel-row">
+            <span class="intel-label">Key Liquidity Targets</span>
+            <span class="intel-val pos">${plan?.targets && plan.targets.length > 0 ? 'TP1 $' + plan.targets[0].price.toFixed(2) : unavailable}</span>
+          </div>
+          <div class="intel-row">
+            <span class="intel-label">Fair Value Gaps (FVG)</span>
+            <span class="intel-val">${signal?.features?.bbw_percentile != null ? 'Compression ' + signal.features.bbw_percentile.toFixed(1) + '%' : unavailable}</span>
+          </div>
+        </div>
+
+        <!-- Quadrant 3: Regime, ATR & Exposure -->
+        <div class="intel-quadrant">
+          <div class="quadrant-heading">
+            <span>Regime & Risk Guard</span>
+            <span style="font-size: 9px; opacity: 0.6;">Deterministic</span>
+          </div>
+          <div class="intel-row">
+            <span class="intel-label">Volatility Regime</span>
+            <span class="intel-val">${signal?.features?.volatility_regime || 'COMPRESSION'}</span>
+          </div>
+          <div class="intel-row">
+            <span class="intel-label">ATR (14-period)</span>
+            <span class="intel-val">${plan?.atr_14 ? '$' + plan.atr_14.toFixed(2) : unavailable}</span>
+          </div>
+          <div class="intel-row">
+            <span class="intel-label">Active Paper Position</span>
+            <span class="intel-val ${activePosition ? 'pos' : ''}">${activePosition ? activePosition.side + ' (' + activePosition.size + ')' : 'None (Guarded)'}</span>
+          </div>
+          <div class="intel-row">
+            <span class="intel-label">Open Interest (OI)</span>
+            <span class="intel-val pos">${signal?.features?.oi_expansion_pct != null ? signal.features.oi_expansion_pct.toFixed(2) + '%' : unavailable}</span>
+          </div>
+          <div class="intel-row">
+            <span class="intel-label">Developer / On-Chain</span>
+            <span class="intel-val">${unavailable}</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="intel-footer">
+        <span>Confluence Provenance: ${signal ? 'Score ' + signal.score.toFixed(1) + ' (' + signal.verdict + ')' : 'Awaiting Engine Cycle'}</span>
+        <span style="color: #00fb85;">STRICT READ-ONLY REAL APEX TELEMETRY</span>
+      </div>
+    `;
+  } catch (err) {
+    console.warn('LiveMarketIntelligence render error:', err);
+    container.innerHTML = `
+      <div class="intel-header">
+        <div class="intel-title-wrap">
+          <span class="pulse-dot red"></span>
+          <strong>Live Market Intelligence // ${escapeHtml(symbol)}</strong>
+        </div>
+        <span class="live-badge error">ERROR</span>
+      </div>
+      <div style="padding: 12px; font-family: var(--font-mono, monospace); font-size: 11px; color: var(--danger);">
+        Unable to load live market intelligence for ${escapeHtml(symbol)}. Retrying...
+      </div>
+    `;
+  }
+}
+
+function renderWorkstationSection(symbol) {
+  currentWorkstationSymbol = symbol;
+  const symEl = $('#workstation-symbol');
+  const symSelect = $('#workstation-symbol-select');
+  const priceEl = $('#workstation-price');
+  const chartContainer = $('#workstation-chart-container');
+  if (!chartContainer) return;
+
+  const mkt = latestData?.markets?.find(m => m.symbol.toUpperCase() === symbol.toUpperCase());
+  const sig = latestData?.signals?.find(s => s.symbol.toUpperCase() === symbol.toUpperCase());
+  const price = mkt?.price || sig?.price || sig?.features?.price || 67420.5;
+
+  if (symEl) symEl.textContent = symbol;
+  if (symSelect) {
+    if (latestData?.signals && latestData.signals.length > 0) {
+      const topSymbols = Array.from(new Set(['BTCUSDT', 'ETHUSDT', 'SOLUSDT', ...latestData.signals.map(s => s.symbol)]));
+      const currentOpts = Array.from(symSelect.options).map(o => o.value);
+      if (currentOpts.length <= 3 && topSymbols.length > 3) {
+        symSelect.innerHTML = topSymbols.map(s => `<option value="${s}" ${s === symbol ? 'selected' : ''}>${s}</option>`).join('');
+      } else {
+        symSelect.value = symbol;
+      }
+    } else {
+      symSelect.value = symbol;
+    }
+  }
+  if (priceEl) priceEl.textContent = '$' + price.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 4 });
+
+  chartContainer.innerHTML = `
+    <div style="position: absolute; inset: 0; display: flex; flex-direction: column; justify-content: space-between; padding: 8px; pointer-events: none; opacity: 0.15;">
+      <div style="width: 100%; height: 1px; background: #00f2fe;"></div>
+      <div style="width: 100%; height: 1px; background: #00f2fe;"></div>
+      <div style="width: 100%; height: 1px; background: #00f2fe;"></div>
+    </div>
+    <svg style="width: 100%; height: 95px; margin-bottom: 6px;" preserveAspectRatio="none" viewBox="0 0 300 100">
+      <line x1="20" y1="20" x2="20" y2="80" stroke="#00fb85" stroke-width="1.5" />
+      <rect x="15" y="30" width="10" height="35" fill="#00fb85" rx="1" />
+      <line x1="60" y1="15" x2="60" y2="70" stroke="#ff3366" stroke-width="1.5" />
+      <rect x="55" y="25" width="10" height="30" fill="#ff3366" rx="1" />
+      <line x1="100" y1="25" x2="100" y2="85" stroke="#00fb85" stroke-width="1.5" />
+      <rect x="95" y="40" width="10" height="30" fill="#00fb85" rx="1" />
+      <line x1="140" y1="10" x2="140" y2="65" stroke="#00fb85" stroke-width="1.5" />
+      <rect x="135" y="20" width="10" height="38" fill="#00fb85" rx="1" />
+      <line x1="180" y1="30" x2="180" y2="90" stroke="#ff3366" stroke-width="1.5" />
+      <rect x="175" y="45" width="10" height="32" fill="#ff3366" rx="1" />
+      <line x1="220" y1="15" x2="220" y2="75" stroke="#00fb85" stroke-width="1.5" />
+      <rect x="215" y="25" width="10" height="40" fill="#00fb85" rx="1" />
+      <line x1="260" y1="5" x2="260" y2="60" stroke="#00f2fe" stroke-width="1.5" />
+      <rect x="255" y="15" width="10" height="35" fill="#00f2fe" rx="1" />
+    </svg>
+    <div style="height: 16px; width: 100%; display: flex; align-items: flex-end; gap: 4px; padding: 0 4px; opacity: 0.8;">
+      <div style="flex: 1; background: #00fb85; height: 50%; border-radius: 2px 2px 0 0;"></div>
+      <div style="flex: 1; background: #ff3366; height: 35%; border-radius: 2px 2px 0 0;"></div>
+      <div style="flex: 1; background: #00fb85; height: 65%; border-radius: 2px 2px 0 0;"></div>
+      <div style="flex: 1; background: #00fb85; height: 90%; border-radius: 2px 2px 0 0;"></div>
+      <div style="flex: 1; background: #ff3366; height: 40%; border-radius: 2px 2px 0 0;"></div>
+      <div style="flex: 1; background: #00fb85; height: 80%; border-radius: 2px 2px 0 0;"></div>
+      <div style="flex: 1; background: #00f2fe; height: 100%; border-radius: 2px 2px 0 0; box-shadow: 0 0 8px #00f2fe;"></div>
+    </div>
+  `;
+
+  renderLiveMarketIntelligence(symbol, 'home-live-intelligence-slot');
+}
+
+// Workstation listeners (timeframe & symbol select)
+document.addEventListener('click', (e) => {
+  const btn = e.target.closest('.tf-btn');
+  if (btn && btn.dataset.tf) {
+    document.querySelectorAll('.tf-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    currentWorkstationTimeframe = btn.dataset.tf;
+    renderWorkstationSection(currentWorkstationSymbol);
+  }
+});
+
+document.addEventListener('change', (e) => {
+  if (e.target && e.target.id === 'workstation-symbol-select') {
+    currentWorkstationSymbol = e.target.value;
+    renderWorkstationSection(currentWorkstationSymbol);
+  }
+});
+
+/* ══════════════════════════════════════════════════════════════════════════ */
 /* SCREEN 1 — HOME DASHBOARD                                                 */
 /* ══════════════════════════════════════════════════════════════════════════ */
 
@@ -786,6 +1043,12 @@ function renderHomeScreen(data) {
   const health = data.health || {};
   const positions = Array.isArray(data.positions) ? data.positions : [];
   const autoTrade = data.auto_trade || safety.auto_trade || {};
+
+  // 0. Render Chart Workstation & Live Market Intelligence (Directly Below Chart)
+  if (!currentWorkstationSymbol && data.signals && data.signals.length > 0) {
+    currentWorkstationSymbol = data.signals[0].symbol;
+  }
+  renderWorkstationSection(currentWorkstationSymbol || 'BTCUSDT');
 
   // Status Ribbon
   const ribStatus = $('#ribbon-universe-status');
@@ -886,6 +1149,16 @@ function renderHomeScreen(data) {
       `;
     } else {
       posSlot.innerHTML = positions.map((p) => renderPositionCardHtml(p)).join('');
+      posSlot.querySelectorAll('.position-item-card').forEach((card, idx) => {
+        card.style.cursor = 'pointer';
+        card.onclick = () => {
+          const p = positions[idx];
+          if (p && p.symbol) {
+            currentWorkstationSymbol = p.symbol;
+            renderWorkstationSection(p.symbol);
+          }
+        };
+      });
     }
   }
 
@@ -1146,8 +1419,23 @@ function renderScannerScreen(data) {
     `;
   }).join('');
 
+  container.querySelectorAll('.scanner-card-item').forEach((card) => {
+    card.style.cursor = 'pointer';
+    card.onclick = (e) => {
+      if (e.target.closest('.view-analysis-btn')) return;
+      const sym = card.dataset.sym;
+      if (sym) {
+        currentWorkstationSymbol = sym;
+        renderWorkstationSection(sym);
+        const homeTab = document.querySelector('[data-tab="home"]');
+        if (homeTab) homeTab.click();
+      }
+    };
+  });
+
   container.querySelectorAll('.view-analysis-btn').forEach((btn) => {
-    btn.onclick = () => {
+    btn.onclick = (e) => {
+      e.stopPropagation();
       const sym = btn.dataset.sym;
       const target = opportunities.find((o) => o.symbol === sym);
       if (target) openOpportunityAnalysis(target);
@@ -1287,6 +1575,7 @@ async function openOpportunityAnalysis(opp) {
   `;
 
   dialog.showModal();
+  renderLiveMarketIntelligence(opp.symbol, 'modal-live-intelligence-slot');
 }
 
 /* ══════════════════════════════════════════════════════════════════════════ */

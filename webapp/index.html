@@ -9,6 +9,10 @@
   <meta name="format-detection" content="telephone=no">
   <meta name="theme-color" content="#090d14">
   <title>APEX 24/7 Command Center</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" rel="stylesheet">
   <link rel="stylesheet" href="/assets/style.css">
   <script src="https://telegram.org/js/telegram-web-app.js"></script>
 </head>
@@ -93,6 +97,38 @@
             <span id="ribbon-latency-badge" class="subtle-pill">11s LATENCY</span>
           </div>
         </div>
+
+        <!-- 0. Interactive Market Chart & Live Intelligence Workstation -->
+        <section class="card chart-workstation-card" aria-label="Market Chart & Intelligence">
+          <div class="card-head">
+            <div class="workstation-title-group">
+              <span class="pulse-dot cyan"></span>
+              <select id="workstation-symbol-select" class="chart-symbol-select" aria-label="Select Symbol">
+                <option value="BTCUSDT">BTCUSDT</option>
+                <option value="ETHUSDT">ETHUSDT</option>
+                <option value="SOLUSDT">SOLUSDT</option>
+              </select>
+              <span class="subtle-pill" id="workstation-perp-badge">BINANCE USDT-M</span>
+              <span class="live-price-tag" id="workstation-price">$67,420.50</span>
+            </div>
+            <div class="timeframe-pill-bar" id="workstation-tf-bar">
+              <button class="tf-btn" data-tf="1m">1m</button>
+              <button class="tf-btn" data-tf="5m">5m</button>
+              <button class="tf-btn active" data-tf="15m">15m</button>
+              <button class="tf-btn" data-tf="1h">1h</button>
+              <button class="tf-btn" data-tf="4h">4h</button>
+            </div>
+          </div>
+          
+          <div class="chart-canvas-container" id="workstation-chart-container">
+            <!-- Dynamic Candlestick SVG rendered by app.js -->
+          </div>
+
+          <!-- REUSABLE LIVE MARKET INTELLIGENCE (DIRECTLY BELOW CHART) -->
+          <div id="home-live-intelligence-slot" class="live-intelligence-slot">
+            <!-- Rendered by renderLiveMarketIntelligence() -->
+          </div>
+        </section>
 
         <!-- 1. Equity Card -->
         <section class="card equity-card" aria-labelledby="equity-title">
@@ -893,6 +929,7 @@
       <button id="close-analysis-x" class="icon-button" aria-label="Close modal">✕</button>
     </div>
     <div id="analysis-body" class="pinpoint-scroll"></div>
+    <div id="modal-live-intelligence-slot" class="live-intelligence-slot modal-intelligence"></div>
     <div class="dialog-actions">
       <button id="close-analysis-btn" class="secondary">Close</button>
       <button id="prepare-order-btn" class="primary">Ask AI About Setup →</button>
